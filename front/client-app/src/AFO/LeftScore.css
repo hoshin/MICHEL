@@ -1,0 +1,10 @@
+@font-face { font-family: BigNoodleTitling; src: url('../assets/big_noodle_titling.ttf'); }
+
+.team-name-svg {
+    width: 60%;
+    padding-left: 1em;
+}
+.team-name-svg > text {
+    fill: white;
+    font-family: "BigNoodleTitling", sans-serif ;
+}

@@ -1,0 +1,12 @@
+.map-setup {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    width: 50%
+}
+
+.map-setup-buttons {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}

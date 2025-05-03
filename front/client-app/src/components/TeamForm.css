@@ -1,0 +1,16 @@
+.team-layout {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+}
+
+.team-layout .line {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+}
+
+.score{
+    font-weight: 600;
+    font-size: 3.5rem;
+}

@@ -1,0 +1,21 @@
+@font-face { font-family: BigNoodleTitling; src: url('../assets/big_noodle_titling.ttf'); }
+
+.middle-text {
+    position: fixed;
+    margin-top: 8px;
+    font-family: "BigNoodleTitling", sans-serif;
+    font-size: 1.5em;
+}
+
+.tournament-logo {
+    position: relative;
+    top:-85px;
+    width: 20%;
+    left:1px;
+}
+
+.map-count-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}

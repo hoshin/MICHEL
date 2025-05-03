@@ -1,0 +1,79 @@
+{
+	"Name": "michel-deck",
+	"Version": "0.1.0.0",
+	"Author": "hoshin-casts",
+	"Actions": [
+		{
+			"Name": "Score updater",
+			"UUID": "com.hoshin-casts.michel-deck.increment",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "Calls the M.I.C.H.E.L. API to update a score (increment or decrement by 1)",
+			"PropertyInspectorPath": "ui/increment-counter.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Map count updater",
+			"UUID": "com.hoshin-casts.michel-deck.map-counter",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "",
+			"PropertyInspectorPath": "ui/map-counter.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Side Toggler",
+			"UUID": "com.hoshin-casts.michel-deck.toggle",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "",
+			"PropertyInspectorPath": "ui/toggle.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		}
+	],
+	"Category": "michel-deck",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Streamdeck plugin to pilot the M.I.C.H.E.L. app",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 2,
+	"Software": {
+		"MinimumVersion": "6.4"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "20",
+		"Debug": "enabled"
+	},
+	"UUID": "com.hoshin-casts.michel-deck"
+}
