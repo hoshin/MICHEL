@@ -1,41 +1,23 @@
-.team-name-svg {
-    width: 60%;
-    padding-left: 1em;
-}
-.team-name-svg > text {
-    fill: white;
-    font-family: "BigNoodleTitling", sans-serif ;
-}
-
 .left-cast-bar {
     display: flex;
     background-image: url('./images/left-bar.png');
     background-repeat: no-repeat;
     height:60px;
-    width: 300px;
-    background-position-x: -400px;
+    width: 400px;
+    background-position-x: -270px;
     background-color: white;
     justify-content: space-between;
     font-family: "BigNoodleTitling", sans-serif;
     margin-right: 20px;
 }
 .left-cast-score {
-    color: black;
-    font-size: 3em;
-    margin-right: 20px;
-    margin-top: 5px;
+margin-right: 20px;
 }
 .left-cast-logo {
-    position: relative;
-    right:5px;
-    background-color: black;
-    padding-right: 4px;
+    right:15px;
 }
-.left-cast-name {
-    margin-top: 5.5%;
-    font-size: 1.6em;
-    width: 60%;
-    color: white;
-    padding-right: 10%;
+
+.left-cast-bar > p {
     text-align: right;
+    padding-left: 5%;
 }

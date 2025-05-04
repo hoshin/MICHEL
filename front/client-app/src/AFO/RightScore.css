@@ -1,32 +1,24 @@
 .right-cast-bar {
+    border:1px solid red;
     display: flex;
     background-image: url('./images/right-bar.png');
     background-repeat: no-repeat;
     height:60px;
-    width: 300px;
-    background-position-x: 75px;
+    width: 400px;
+    background-position-x: 50px;
     background-color: white;
     justify-content: space-between;
     font-family: "BigNoodleTitling", sans-serif;
     margin-left: 20px;
 }
 .right-cast-score {
-    color: black;
-    font-size: 3em;
     margin-left: 20px;
-    margin-top: 5px;
 }
 .right-cast-logo {
-    position: relative;
-    left:5px;
-    background-color: black;
-    padding-left: 4px;
+    left:15px;
 }
-.right-cast-name {
-    margin-top: 5.5%;
-    font-size: 1.6em;
-    width: 60%;
-    color: white;
-    padding-left: 5%;
+
+.right-cast-bar > p {
     text-align: left;
+    padding-right: 5%;
 }

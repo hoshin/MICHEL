@@ -1,11 +1,46 @@
 .cast-score {
     display: flex;
     justify-content: space-between;
-    width: 815px;
+    border:1px solid teal;
 }
 
 .score-tournament-logo {
     position: relative;
     height: 120px;
     top: -30px;
+}
+
+.smallest-font {
+    height:1.2rem;
+    margin-top: 1.15rem !important;
+    font-size: 1.2rem;
+    text-overflow: ellipsis;
+}
+.small-font {
+    height:1.3rem;
+    font-size: 1.4rem;
+    text-overflow: ellipsis;
+}
+.regular-font {
+    height: 1.8rem;
+    font-size: 1.75rem;
+}
+
+.cast-team-name {
+    margin-top: 1rem;
+    width: 60%;
+    color: white;
+    overflow: hidden;
+}
+
+.cast-team-logo {
+    width: 60px;
+    object-fit: contain;
+    position: relative;
+}
+
+.cast-team-score {
+    color: black;
+    font-size: 3em;
+    margin-top: 5px;
 }
