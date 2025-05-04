@@ -26,15 +26,15 @@
 
 .left-logo {
     left:1.5%;
+    width: 80px;
+    object-fit: contain;
+    position: relative;
 }
 
 .left-name {
-    font-size: 3em;
-    margin-top: 5px;
-    margin-left: 30px;
-    width:50%;
     color: white;
     text-align: right;
+    overflow:hidden;
 }
 
 .left-score {

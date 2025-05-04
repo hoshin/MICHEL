@@ -1,10 +1,16 @@
 import './RightBar.css'
 function RightBar({teamName, teamLogo, teamScore}) {
-
+    let fontClass = 'regular-font-game';
+    if(teamName.length > 19) {
+        fontClass = 'small-font-game'
+    }
+    if(teamName.length > 25) {
+        fontClass = 'smallest-font-game'
+    }
     return <div className="right-bar">
         <div className="right-score">{teamScore}</div>
         <img src={teamLogo} className="right-logo"/>
-        <div className="right-name">{teamName}</div>
+        <p className={`right-name ${fontClass}`}>{teamName}</p>
     </div>
 }
 
