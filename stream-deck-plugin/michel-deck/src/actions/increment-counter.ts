@@ -11,10 +11,6 @@ export class IncrementCounter extends SingletonAction<CounterSettings> {
 	 * we're setting the title to the "count" that is incremented in {@link IncrementCounter.onKeyDown}.
 	 */
 	override onWillAppear(ev: WillAppearEvent<CounterSettings>): void | Promise<void> {
-		ev.action.setSettings({
-			team: 1,
-			direction: '+'
-		})
 		return ev.action.setTitle('+');
 	}
 
@@ -27,8 +23,6 @@ export class IncrementCounter extends SingletonAction<CounterSettings> {
 	override async onKeyDown(ev: KeyDownEvent<CounterSettings>): Promise<void> {
 		// Update the count from the settings.
 		const { settings } = ev.payload;
-		// settings.incrementBy ??= 1;
-		// settings.count = (settings.count ?? 0) + settings.incrementBy;
 
 		const action = settings.direction === '+' ? 'increase' : 'decrease';
 

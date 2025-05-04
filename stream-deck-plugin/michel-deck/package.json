@@ -1,4 +1,5 @@
 {
+    "version": "0.1.0",
     "scripts": {
         "build": "rollup -c",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.hoshin-casts.michel-deck\""
