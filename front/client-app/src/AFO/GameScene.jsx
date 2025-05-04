@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import './style.css'
+import './GameScene.css'
 import LeftBar from "./LeftBar.jsx";
 import RightBar from "./RightBar.jsx";
 import { MapCount } from "./MapCount.jsx";

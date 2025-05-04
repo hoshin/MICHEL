@@ -1,4 +1,4 @@
-import './mapCount.css'
+import './MapCount.css'
 import {DEFAULT_LOGO} from "../config.js";
 
 export function MapCount(props) {

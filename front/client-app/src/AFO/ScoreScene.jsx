@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import './style.css'
+import './ScoreScene.css'
 import RightScore from "./RightScore.jsx";
 import LeftScore from "./LeftScore.jsx";
 import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "../config.js";

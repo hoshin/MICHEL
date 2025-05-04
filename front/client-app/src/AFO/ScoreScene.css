@@ -1,0 +1,11 @@
+.cast-score {
+    display: flex;
+    justify-content: space-between;
+    width: 815px;
+}
+
+.score-tournament-logo {
+    position: relative;
+    height: 120px;
+    top: -30px;
+}

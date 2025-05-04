@@ -1,3 +1,4 @@
+import './RightScore.css'
 function RightScore({teamName, teamLogo, teamScore}) {
 
     return <div className="right-cast-bar">

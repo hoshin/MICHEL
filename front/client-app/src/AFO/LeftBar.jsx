@@ -1,3 +1,4 @@
+import './LeftBar.css'
 function LeftBar({teamName, teamLogo, teamScore}) {
 
     return <div className="left-bar">
