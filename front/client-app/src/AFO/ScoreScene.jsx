@@ -26,7 +26,7 @@ function ScoreScene() {
     console.log(logo, optionalLogoDisplay, tournamentLogo)
     const originalOrder = right === 'team1'
   return (
-      <div className="">
+      <div style={{padding:'10em'}}>
           { originalOrder ? <>
               <div className="header cast-score">
                   <LeftScore teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score}/>
