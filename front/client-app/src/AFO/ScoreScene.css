@@ -1,7 +1,6 @@
 .cast-score {
     display: flex;
     justify-content: space-between;
-    border:1px solid teal;
 }
 
 .score-tournament-logo {

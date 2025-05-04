@@ -1,5 +1,4 @@
 .right-cast-bar {
-    border:1px solid red;
     display: flex;
     background-image: url('./images/right-bar.png');
     background-repeat: no-repeat;
