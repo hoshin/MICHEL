@@ -25,25 +25,25 @@ function GameScene() {
     const { right, mapCount, mapFormat, tournamentLogo } = teamsData.display
 
     const originalOrder = right === 'team1'
-  return (
-      <div className="fullscreen">
+    return (
+        <div className="fullscreen">
           { originalOrder ? <>
               <div className="header">
                   <LeftBar teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score}/>
                   <RightBar teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score}/>
               </div>
           </> :
-              <>
-                  <div className="header">
-                      <LeftBar teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score}/>
-                      <RightBar teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score}/>
-                  </div>
-              </> }
+          <>
+              <div className="header">
+                  <LeftBar teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score}/>
+                  <RightBar teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score}/>
+              </div>
+          </> }
         <div className="footer">
           <MapCount mapCount={mapCount} mapFormat={mapFormat} tournamentLogo={tournamentLogo}></MapCount>
         </div>
       </div>
-  )
+    )
 }
 
 export default GameScene;

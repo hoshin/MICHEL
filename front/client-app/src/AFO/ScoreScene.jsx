@@ -30,14 +30,18 @@ function ScoreScene() {
           { originalOrder ? <>
               <div className="header cast-score">
                   <LeftScore teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score}/>
-                  <img className="score-tournament-logo" src={optionalLogoDisplay ? logo : ''}/>
+                  <div className="score-tournament-logo-container">
+                    <img className="score-tournament-logo" src={optionalLogoDisplay ? logo : ''}/>
+                  </div>
                   <RightScore teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score}/>
               </div>
           </> :
               <>
                   <div className="header cast-score">
                       <LeftScore teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score}/>
-                      <img className="score-tournament-logo" src={optionalLogoDisplay ? logo : ''}/>
+                      <div className="score-tournament-logo-container">
+                        <img className="score-tournament-logo" src={optionalLogoDisplay ? logo : ''}/>
+                      </div>
                       <RightScore teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score}/>
                   </div>
               </> }
