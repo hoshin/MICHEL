@@ -33,47 +33,44 @@ function ConfigurationCenter() {
     const logo = tournamentLogo || DEFAULT_LOGO
   return (
     <div className="configuration-center-app">
-      <section>
-          <div className="app-name">M.I.C.H.E.L.</div>
-      </section>
-      <section className="main-interface">
-          <TeamForm
-              teamUpdateName={sendCommandHandler('updateTeam1Name')}
-              teamIncreaseScore={sendCommandHandler('increaseTeam1Score')}
-              teamDecreaseScore={sendCommandHandler('decreaseTeam1Score')}
-              teamName={team1Name}
-              teamScore={team1Score}
-              teamLogo={team1Logo}
-              updateTeamLogo={sendCommandHandler('updateTeam1Logo')}
-              side={'team1'}
-          />
-          <TeamForm
-              teamUpdateName={sendCommandHandler('updateTeam2Name')}
-              teamIncreaseScore={sendCommandHandler('increaseTeam2Score')}
-              teamDecreaseScore={sendCommandHandler('decreaseTeam2Score')}
-              teamName={team2Name}
-              teamScore={team2Score}
-              teamLogo={team2Logo}
-              updateTeamLogo={sendCommandHandler('updateTeam2Logo')}
-              side={'team2'}
-          />
-
-      </section>
-      <section className="secondary-setup">
-          <MapSetup increaseMapCount={sendCommandHandler('increaseMapCount')} decreaseMapCount={sendCommandHandler('decreaseMapCount')} updateMapFormat={sendCommandHandler('updateMapFormat')} mapFormat={mapFormat} mapCount={mapCount} />
-      </section>
-
         <section>
-            <button onClick={sendCommandHandler('swapTeams')}>
+            <div className="app-name">M.I.C.H.E.L.</div>
+        </section>
+        <section className="main-interface">
+            <TeamForm
+                teamUpdateName={sendCommandHandler('updateTeam1Name')}
+                teamIncreaseScore={sendCommandHandler('increaseTeam1Score')}
+                teamDecreaseScore={sendCommandHandler('decreaseTeam1Score')}
+                teamName={team1Name}
+                teamScore={team1Score}
+                teamLogo={team1Logo}
+                updateTeamLogo={sendCommandHandler('updateTeam1Logo')}
+                side={'team1'}
+            />
+            <TeamForm
+                teamUpdateName={sendCommandHandler('updateTeam2Name')}
+                teamIncreaseScore={sendCommandHandler('increaseTeam2Score')}
+                teamDecreaseScore={sendCommandHandler('decreaseTeam2Score')}
+                teamName={team2Name}
+                teamScore={team2Score}
+                teamLogo={team2Logo}
+                updateTeamLogo={sendCommandHandler('updateTeam2Logo')}
+                side={'team2'}
+            />
+        </section>
+        <section className="secondary-setup">
+            <MapSetup increaseMapCount={sendCommandHandler('increaseMapCount')} decreaseMapCount={sendCommandHandler('decreaseMapCount')} updateMapFormat={sendCommandHandler('updateMapFormat')} mapFormat={mapFormat} mapCount={mapCount} />
+
+            <button className="big-button" onClick={sendCommandHandler('swapTeams')}>
                 Swap Teams
             </button>
         </section>
 
-      <section className="secondary-setup">
-          <div className="line"><span>Logo : </span><input width={'50%'} type="text" onChange={sendCommandHandler('updateTournamentLogo')} defaultValue={tournamentLogo}/></div>
-          <div className="line"><span>Preview :</span><img height="40px" src={logo}></img></div>
-          Show in mini-score : <input type="checkbox" onChange={sendCommandHandler('toggleOptionalLogoDisplay')} checked={optionalLogoDisplay}/>
-      </section>
+        <section className="secondary-setup configuration-footer">
+            <div className="line"><div>Logo</div><input width={'50%'} type="text" onChange={sendCommandHandler('updateTournamentLogo')} defaultValue={tournamentLogo}/></div>
+            <div className="line logo-preview"><img height="60px" src={logo}></img>
+            <div>Show in mini-score</div><input type="checkbox" onChange={sendCommandHandler('toggleOptionalLogoDisplay')} checked={optionalLogoDisplay}/></div>
+        </section>
     </div>
   )
 }
