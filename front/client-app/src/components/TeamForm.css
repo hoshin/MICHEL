@@ -21,6 +21,10 @@
     margin-bottom: 0.5rem;
 }
 
+.line div {
+    text-align: left;
+}
+
 .sub-line {
     display: flex;
     flex-direction: row;

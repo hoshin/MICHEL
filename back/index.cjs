@@ -5,8 +5,9 @@ const port = 3000
 
 const { home, swapTeams, team1IncreaseScore, team1DecreaseScore, team2IncreaseScore, team2DecreaseScore,
     team1UpdateName, team2UpdateName, decreaseMapCount, increaseMapCount, updateMapFormat,
-    updateTeam1Logo, updateTeam2Logo, updateTournamentLogo, toggleOptionalLogoDisplay
+    updateTeam1Logo, updateTeam2Logo, updateTournamentLogo, toggleOptionalLogoDisplay, updateFromMatchId
 } = require('./handlers/home')
+const {initData} = require("./handlers/home.js");
 
 let serverSocket = null
 
@@ -24,6 +25,7 @@ app.post('/decrease-map-count', (req, res) => decreaseMapCount(req, res, connect
 app.post('/swap-teams', (req, res) => swapTeams(req, res, connectionPool))
 
 const server = app.listen(port, () => {
+    initData(connectionPool)
     console.log(`M.I.C.H.E.L. listening on port : ${port}`)
     // Management Interface for Casting Hosts Enjoying Lightness
 })

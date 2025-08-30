@@ -5,8 +5,11 @@
 
 .score-tournament-logo {
     position: relative;
-    height: 120px;
+    width: 270px;
     top: -30px;
+    left: -47px;
+    max-height: 120px;
+    object-fit: contain;
 }
 
 .score-tournament-logo-container {
