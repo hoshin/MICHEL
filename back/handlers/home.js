@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import {DEFAULT_STATE} from "../../front/client-app/src/config.js";
 
 let seriesData = {
     team1: {
@@ -234,7 +235,7 @@ export const initData = (connectionPool) => {
         const configFile = fs.readFileSync('./back/config.json')
         console.log('Config file present ... updating seriesData!')
         const jsonSeriesConfigurationFromFile = JSON.parse(configFile.toString('utf8')).seriesData
-        console.log(jsonSeriesConfigurationFromFile)
+
         if(jsonSeriesConfigurationFromFile?.faceIt?.matchId?.length > 0) {
             console.log(`FaceIt matchID present in config file! Building series data with it! ${jsonSeriesConfigurationFromFile.faceIt.matchId}`)
             updateFromMatchId(null, null, connectionPool, jsonSeriesConfigurationFromFile.faceIt.matchId)

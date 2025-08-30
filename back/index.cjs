@@ -58,7 +58,7 @@ wsServer.on('connection', socket => {
             case 'updateTeam1Logo': updateTeam1Logo(null, null, connectionPool, command.value);break;
             case 'updateTeam2Logo': updateTeam2Logo(null, null, connectionPool, command.value);break;
             case 'updateTournamentLogo' : updateTournamentLogo(null, null, connectionPool, command.value);break;
-            case 'toggleOptionalLogoDisplay' : toggleOptionalLogoDisplay(null, null, connectionPool, command.value);break;
+            case 'toggleOptionalLogoDisplay' : toggleOptionalLogoDisplay(null, null, connectionPool);break;
             case 'updateFromMatchId': updateFromMatchId(null, null, connectionPool, command.value);break;
             default: home(null, null, connectionPool)
         }
