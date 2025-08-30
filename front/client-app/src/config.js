@@ -16,6 +16,9 @@ export const DEFAULT_STATE = {
         mapFormat: 'FT3',
         tournamentLogo: '',
         optionalLogoDisplay: true
+    },
+    faceIt: {
+        matchId: ''
     }
 }
 
