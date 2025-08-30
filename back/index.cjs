@@ -41,7 +41,9 @@ wsServer.on('connection', socket => {
     connectionPool.push(socket)
     socket.on('message', buffer => {
         const command = JSON.parse(buffer.toString('utf8'))
-        console.log('incoming command', command)
+        if(process.env.DEBUG){
+            console.log('[DEBUG] Incoming command: ', command)
+        }
         switch(command.command){
             case 'increaseTeam1Score': team1IncreaseScore(null, null, connectionPool);break;
             case 'increaseTeam2Score': team2IncreaseScore(null, null, connectionPool);break;
@@ -61,8 +63,3 @@ wsServer.on('connection', socket => {
         }
     })
 })
-
-export default {
-    app,
-    server
-}

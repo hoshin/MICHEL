@@ -39,122 +39,138 @@ export const home = (req, res, connectionPool) => {
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-// export const generalDataWS = (connectionPool) => {
-//     connectionPool.forEach(socket => {
-//         socket.send(JSON.stringify(seriesData))
-//     })
-// }
-
-
-// export const update = (req, res, socket) => {
-//     seriesData = req.body.payload
-//     res.json(seriesData)
-// }
-
-export const swapTeams = (req, res, connectionPool) => {
+export const swapTeams = (req, res, connectionPool, debug = false) => {
     const rightTeam = seriesData.display.right
     const leftTeam = seriesData.display.left
     seriesData.display.right = leftTeam
     seriesData.display.left = rightTeam
-    console.log('swapTeams')
+    if(debug){
+        console.log('swapTeams')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const team1IncreaseScore = (req, res, connectionPool) => {
+export const team1IncreaseScore = (req, res, connectionPool, debug = false) => {
     seriesData.team1.score++
-    console.log('team1IncreaseScore')
+    if(debug){
+        console.log('team1IncreaseScore')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const team2IncreaseScore = (req, res, connectionPool) => {
+export const team2IncreaseScore = (req, res, connectionPool, debug = false) => {
     seriesData.team2.score++
-    console.log('team2IncreaseScore')
+    if(debug){
+        console.log('team2IncreaseScore')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
 
-export const team1DecreaseScore = (req, res, connectionPool) => {
+export const team1DecreaseScore = (req, res, connectionPool, debug = false) => {
     if(seriesData.team1.score>0){
         seriesData.team1.score--
     }
-    console.log('team1DecreaseScore')
+    if(debug){
+        console.log('team1DecreaseScore')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const team2DecreaseScore = (req, res, connectionPool) => {
+export const team2DecreaseScore = (req, res, connectionPool, debug = false) => {
     if(seriesData.team2.score>0) {
         seriesData.team2.score--
     }
-    console.log('team2DecreaseScore')
+    if(debug){
+        console.log('team2DecreaseScore')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const team1UpdateName = (req, res, connectionPool, newName) => {
+export const team1UpdateName = (req, res, connectionPool, newName, debug = false) => {
     seriesData.team1.name = newName
-    console.log('team1UpdateName')
+    if(debug){
+        console.log('team1UpdateName')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const team2UpdateName = (req, res, connectionPool, newName) => {
+export const team2UpdateName = (req, res, connectionPool, newName, debug = false) => {
     seriesData.team2.name = newName
-    console.log('team2UpdateName')
+    if(debug){
+        console.log('team2UpdateName')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const updateMapFormat = (req, res, connectionPool, newFormat) => {
+export const updateMapFormat = (req, res, connectionPool, newFormat, debug = false) => {
     seriesData.display.mapFormat = newFormat
-    console.log('updateMapFormat')
+    if(debug){
+        console.log('updateMapFormat')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const updateTeam1Logo = (req, res, connectionPool, newLogo) => {
+export const updateTeam1Logo = (req, res, connectionPool, newLogo, debug = false) => {
     seriesData.team1.logo = newLogo
-    console.log('updateTeam1Logo')
+    if(debug){
+        console.log('updateTeam1Logo')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const updateTournamentLogo = (req, res, connectionPool, newLogo) => {
+export const updateTournamentLogo = (req, res, connectionPool, newLogo, debug = false) => {
     seriesData.display.tournamentLogo = newLogo
-    console.log('updateTournamentLogo')
+    if(debug){
+        console.log('updateTournamentLogo')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const updateTeam2Logo = (req, res, connectionPool, newLogo) => {
+export const updateTeam2Logo = (req, res, connectionPool, newLogo, debug = false) => {
     seriesData.team2.logo = newLogo
-    console.log('updateTeam2Logo')
+    if(debug){
+        console.log('updateTeam2Logo')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const toggleOptionalLogoDisplay = (req, res, connectionPool, newLogo) => {
+export const toggleOptionalLogoDisplay = (req, res, connectionPool, debug = false) => {
     seriesData.display.optionalLogoDisplay = !seriesData.display.optionalLogoDisplay
-    console.log('updateOptionalLogoDisplay')
+    if(debug){
+        console.log('toggleOptionalLogoDisplay')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const increaseMapCount = (req, res, connectionPool) => {
+export const increaseMapCount = (req, res, connectionPool, debug = false) => {
     seriesData.display.mapCount++
-    console.log('increaseMapCount')
+    if(debug){
+        console.log('increaseMapCount')
+    }
 
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
-export const decreaseMapCount = (req, res, connectionPool) => {
+export const decreaseMapCount = (req, res, connectionPool, debug = false) => {
     if(seriesData.display.mapCount>1){
         seriesData.display.mapCount--
     }
-    console.log('decreaseMapCount')
+    if(debug){
+        console.log('decreaseMapCount')
+    }
     sendUpdatedStateToCaller(res, connectionPool)
 }
 
