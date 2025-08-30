@@ -3,14 +3,19 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "run": "node ./back/index.js"
+    "run": "node back/index.cjs",
+    "electron-start": "electron ."
   },
   "private": true,
   "dependencies": {
     "@elgato/cli": "^1.1.1",
     "express": "^5.1.0",
     "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "electron": "^36.2.0"
   }
 }

@@ -23,7 +23,6 @@ app.post('/increase-map-count', (req, res) => increaseMapCount(req, res, connect
 app.post('/decrease-map-count', (req, res) => decreaseMapCount(req, res, connectionPool))
 app.post('/swap-teams', (req, res) => swapTeams(req, res, connectionPool))
 
-
 const server = app.listen(port, () => {
     console.log(`M.I.C.H.E.L. listening on port : ${port}`)
     // Management Interface for Casting Hosts Enjoying Lightness
@@ -60,3 +59,8 @@ wsServer.on('connection', socket => {
         }
     })
 })
+
+export default {
+    app,
+    server
+}
