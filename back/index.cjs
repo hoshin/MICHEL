@@ -5,9 +5,9 @@ const port = 3000
 
 const { home, swapTeams, team1IncreaseScore, team1DecreaseScore, team2IncreaseScore, team2DecreaseScore,
     team1UpdateName, team2UpdateName, decreaseMapCount, increaseMapCount, updateMapFormat,
-    updateTeam1Logo, updateTeam2Logo, updateTournamentLogo, toggleOptionalLogoDisplay, updateFromMatchId
+    updateTeam1Logo, updateTeam2Logo, updateTournamentLogo, toggleOptionalLogoDisplay, initialMatchDataFromFaceItMatchId,
+    initData, fetchFaceItMatchUpdates
 } = require('./handlers/home')
-const {initData} = require("./handlers/home.js");
 
 let serverSocket = null
 
@@ -59,7 +59,8 @@ wsServer.on('connection', socket => {
             case 'updateTeam2Logo': updateTeam2Logo(null, null, connectionPool, command.value);break;
             case 'updateTournamentLogo' : updateTournamentLogo(null, null, connectionPool, command.value);break;
             case 'toggleOptionalLogoDisplay' : toggleOptionalLogoDisplay(null, null, connectionPool);break;
-            case 'updateFromMatchId': updateFromMatchId(null, null, connectionPool, command.value);break;
+            case 'updateFromMatchId': initialMatchDataFromFaceItMatchId(null, null, connectionPool, command.value);break;
+            case 'fetchFaceItMatchUpdates': fetchFaceItMatchUpdates(null, null, connectionPool, command.value); break
             default: home(null, null, connectionPool)
         }
     })

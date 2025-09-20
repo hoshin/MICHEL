@@ -17,6 +17,8 @@ export const DEFAULT_STATE = {
         tournamentLogo: '',
         optionalLogoDisplay: true
     },
+    standings: {
+    },
     faceIt: {
         matchId: ''
     }

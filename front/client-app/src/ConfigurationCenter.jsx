@@ -5,9 +5,7 @@ import MapSetup from "./components/MapSetup.jsx";
 
 import './ConfigurationCenter.css'
 import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
-import {updateFromMatchId} from "../../../back/handlers/home.js";
-// import faceitLogo from './assets/FCE_LG_S5_Logo_V_White.png'
-// import afoLogo from './assets/FCE_LG_S5_Logo_V_White.png'
+import {fetchFaceItMatchUpdates} from "../../../back/handlers/home.js";
 
 const socket = new WebSocket(WEBSOCKET_URL)
 
@@ -17,6 +15,7 @@ socket.addEventListener('open', event => {
 
 let setTeamsDataWS = () => {}
 socket.addEventListener('message', event => {
+    console.log('[FOO] Return data', JSON.parse(event.data))
     setTeamsDataWS(JSON.parse(event.data))
 })
 
@@ -34,7 +33,13 @@ function ConfigurationCenter() {
     const { score: team2Score, name: team2Name, logo: team2Logo } = teamsData.team2
     const { mapFormat, mapCount, tournamentLogo, optionalLogoDisplay } = teamsData.display
     const { faceIt } = teamsData
+
+    const { standings } = teamsData
     const logo = tournamentLogo || DEFAULT_LOGO
+    const bansToShow = !!standings[`match${mapCount}`]
+    if(bansToShow){
+        console.log(mapCount, standings)
+    }
   return (
     <div className="configuration-center-app">
         <section>
@@ -48,6 +53,7 @@ function ConfigurationCenter() {
                 teamName={team1Name}
                 teamScore={team1Score}
                 teamLogo={team1Logo}
+                teamBanLogo={bansToShow && standings[`match${mapCount}`].bans.team1.heroImage}
                 updateTeamLogo={sendCommandHandler('updateTeam1Logo')}
                 side={'team1'}
             />
@@ -58,6 +64,7 @@ function ConfigurationCenter() {
                 teamName={team2Name}
                 teamScore={team2Score}
                 teamLogo={team2Logo}
+                teamBanLogo={bansToShow && standings[`match${mapCount}`].bans.team2.heroImage}
                 updateTeamLogo={sendCommandHandler('updateTeam2Logo')}
                 side={'team2'}
             />
@@ -78,7 +85,11 @@ function ConfigurationCenter() {
 
         <section className="secondary-setup configuration-footer">
             <div className="line"><div>FaceIt match ID</div><input width={'50%'} type="text" onChange={sendCommandHandler('updateFromMatchId')} defaultValue={faceIt?.matchId}/></div>
+            <button className="big-button" value={mapCount} onClick={sendCommandHandler('fetchFaceItMatchUpdates')}>
+                Update room data
+            </button>
         </section>
+
     </div>
   )
 }

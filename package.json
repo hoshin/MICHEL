@@ -7,15 +7,18 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "run": "node back/index.cjs",
-    "electron-start": "electron ."
+    "electron-start": "electron .",
+    "start:back": ""
   },
   "private": true,
   "dependencies": {
     "@elgato/cli": "^1.1.1",
     "express": "^5.1.0",
+    "typescript": "^5.9.2",
     "ws": "^8.18.1"
   },
   "devDependencies": {
-    "electron": "^36.2.0"
+    "electron": "^36.2.0",
+    "jest": "^30.1.3"
   }
 }

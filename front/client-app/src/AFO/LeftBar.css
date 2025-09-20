@@ -44,3 +44,14 @@
     font-size: 4em;
     width: 30px;
 }
+
+.left-ban-logo {
+    width:80px;
+    object-fit: contain;
+    right: -37px;
+}
+
+.left-ban-text {
+    text-align: center;
+    margin-right: -70px
+}

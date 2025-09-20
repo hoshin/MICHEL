@@ -1,0 +1,25 @@
+{
+  "seriesData": {
+    "team1": {
+      "name": "",
+      "score": 0,
+      "logo": ""
+    },
+    "team2": {
+      "name": "",
+      "score": 0,
+      "logo": ""
+    },
+  "display": {
+      "right": "team1",
+      "left": "team2",
+      "mapCount": 1,
+      "mapFormat": "FT3",
+      "tournamentLogo": "",
+      "optionalLogoDisplay": true
+    },
+    "faceIt": {
+      "matchId": ""
+    }
+  }
+}
