@@ -2,11 +2,13 @@
   "compilerOptions": {
     "module": "es2015",
     "esModuleInterop": true,
-    "target": "es6",
+    "target": "es2015",
     "moduleResolution": "bundler",
     "sourceMap": true,
-    "outDir": "dist/back",
+    "outDir": "../dist/back",
     "removeComments": true
   },
+  "include": ["./index.ts", "./handlers/**/*.ts"],
+  "exclude": ["./**/*.test.ts"],
   "lib": ["es2015"]
 }

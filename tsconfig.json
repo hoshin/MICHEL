@@ -5,8 +5,11 @@
     "target": "es6",
     "moduleResolution": "bundler",
     "sourceMap": true,
-    "outDir": "dist/back",
-    "removeComments": true
+    "outDir": "dist",
+    "removeComments": true,
   },
-  "lib": ["es2015"]
+  "lib": ["es2015"],
+  "exclude": [
+    "**/*.test.ts"
+  ]
 }

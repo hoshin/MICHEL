@@ -1,13 +1,13 @@
-const express = require('express')
-const ws = require('ws')
+import express from 'express'
+import { WebSocketServer } from 'ws'
 const app = express()
 const port = 3000
 
-const { home, swapTeams, team1IncreaseScore, team1DecreaseScore, team2IncreaseScore, team2DecreaseScore,
+import { home, swapTeams, team1IncreaseScore, team1DecreaseScore, team2IncreaseScore, team2DecreaseScore,
     team1UpdateName, team2UpdateName, decreaseMapCount, increaseMapCount, updateMapFormat,
     updateTeam1Logo, updateTeam2Logo, updateTournamentLogo, toggleOptionalLogoDisplay, initialMatchDataFromFaceItMatchId,
     initData, fetchFaceItMatchUpdates
-} = require('./handlers/home')
+} from './handlers/home.js'
 
 let serverSocket = null
 
@@ -36,7 +36,7 @@ server.on('upgrade', (req, socket, head) => {
         wsServer.emit('connection', socket, req)
     })
 })
-const wsServer = new ws.WebSocketServer({ noServer: true })
+const wsServer = new WebSocketServer({ noServer: true })
 wsServer.on('connection', socket => {
     connectionPool.push(socket)
     socket.on('message', buffer => {

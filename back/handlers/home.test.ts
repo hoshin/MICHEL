@@ -1,5 +1,7 @@
 import { fn, spyOn } from 'jest-mock'
-import { updatedLobbyDataFromFaceItMatchId } from './home.js'
+import { describe, expect, it } from '@jest/globals'
+import { updatedLobbyDataFromFaceItMatchId } from './home'
+
 describe('updatedLobbyDataFromFaceItMatchId', () => {
     it('should not try and fetch anything if no matchId is provided', async () => {
         // setup
@@ -12,10 +14,12 @@ describe('updatedLobbyDataFromFaceItMatchId', () => {
     it('should log an error and return if matchId is provided but fetch fails', async () => {
         // setup
         const nextMock = fn()
+
+        const mockedFetchResponse = {
+            status: 418
+        } as unknown as Response
         const fetchMock = spyOn(global, 'fetch').mockResolvedValue(
-            {
-                status: 418
-            }
+           mockedFetchResponse
         )
         const errorSpy = spyOn(console, 'error').mockImplementation(() => {})
         // action
