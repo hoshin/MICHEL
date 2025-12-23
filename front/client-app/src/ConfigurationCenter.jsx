@@ -15,7 +15,6 @@ socket.addEventListener('open', event => {
 
 let setTeamsDataWS = () => {}
 socket.addEventListener('message', event => {
-    console.log('[FOO] Return data', JSON.parse(event.data))
     setTeamsDataWS(JSON.parse(event.data))
 })
 
