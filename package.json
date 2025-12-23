@@ -9,7 +9,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start:electron": "electron ./electron-app/main.js",
-    "build": "rimraf ./dist && rimraf release-builds && cd back && npm run build && cd ../front/client-app && npm run build && cd ../../ && cd ./stream-deck-plugin/michel-deck npm run build:win && npx electron-builder",
+    "build": "rimraf ./dist && rimraf release-builds && cd back && npm run build && cd ../front/client-app && npm run build && cd ../../stream-deck-plugin/michel-deck && npm run build:win && cd ../.. && npx electron-builder",
     "start:back": "cd ./back && npm run start",
     "start:back:build": "node ./dist/back/index.js",
     "start:front": "cd ./front/client-app && npm run dev"
@@ -18,10 +18,11 @@
     "appId": "com.hoshin-casts-michelectron",
     "productName": "MICHELectron",
     "directories": {
-      "output": "release-builds"
+      "output": "dist/electron-release-build"
     },
     "files": [
-      "dist/**/*",
+      "dist/back/**/*",
+      "dist/front/**/*",
       "electron-app/**/*"
     ],
     "win": {
