@@ -1,14 +1,14 @@
 {
   "name": "michelectron",
+  "description": "Electron app that packages a backend and frontend 'all in one' for turnkey functionalities",
+  "author": "Martin 'Hoshin' Bahier",
+  "license": "CC-BY-NC",
   "version": "1.0.0",
-  "description": "Hello World!",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Martin 'Hoshin' Bahier",
-  "license": "MIT",
   "devDependencies": {
     "electron": "^36.2.0"
   },

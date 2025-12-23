@@ -1,14 +1,15 @@
 {
-  "name": "html-overlays",
+  "name": "michel-casting-tools",
   "version": "1.0.0",
-  "description": "",
+  "description": "My tools to help me run a solo production when casting (tailored with the Overwatch game in mind)",
   "main": "electron-app/main.js",
   "type": "module",
   "author": "Martin 'Hoshin' Bahier",
+  "license": "CC-BY-NC",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start:electron": "electron ./electron-app/main.js",
-    "build": "rimraf ./dist && rimraf release-builds && cd back && npm run build && cd ../front/client-app && npm run build && cd ../../ && npx electron-builder && cd ./stream-deck-plugin/michel-deck npm run build:win",
+    "build": "rimraf ./dist && rimraf release-builds && cd back && npm run build && cd ../front/client-app && npm run build && cd ../../ && cd ./stream-deck-plugin/michel-deck npm run build:win && npx electron-builder",
     "start:back": "cd ./back && npm run start",
     "start:back:build": "node ./dist/back/index.js",
     "start:front": "cd ./front/client-app && npm run dev"

@@ -1,5 +1,9 @@
 {
     "version": "0.1.0",
+    "name": "michel-streamdeck-plugin",
+    "description": "A streamdeck plugin with a few functionalities to control the MICHEL back API from a streamdeck",
+    "author": "Martin 'Hoshin' Bahier",
+    "license": "CC-BY-NC",
     "scripts": {
         "build:bash": "rollup -c --file=../../dist/streamdeck-plugin/michel-$npm_package_version",
         "build:win": "rollup -c --file=../../dist/streamdeck-plugin/michel-%npm_package_version%",

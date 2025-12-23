@@ -1,10 +1,11 @@
 {
   "name": "michel-back",
+  "description": "A small server app that provides an API/websockets that can be queried to store / retrieve broadcasted match information",
+  "author": "Martin 'Hoshin' Bahier",
+  "license": "CC-BY-NC",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "type": "module",
-  "author": "Martin 'Hoshin' Bahier",
   "scripts": {
     "test": "npx jest",
     "build": "npx tsc --project tsconfig.json",

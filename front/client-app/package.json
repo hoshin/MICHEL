@@ -1,5 +1,8 @@
 {
-  "name": "client-app",
+  "name": "michel-client-app",
+  "description": "A small client app for the MICHEL API that provides a configuration center and a few pages to integrate in OBS scenes (for example)",
+  "author": "Martin 'Hoshin' Bahier",
+  "license": "CC-BY-NC",
   "private": true,
   "version": "0.0.0",
   "type": "module",
