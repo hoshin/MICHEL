@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "type": "module",
+  "author": "Martin 'Hoshin' Bahier",
   "scripts": {
     "test": "npx jest",
     "build": "npx tsc --project tsconfig.json",

@@ -1,7 +1,8 @@
 {
     "version": "0.1.0",
     "scripts": {
-        "build": "rollup -c",
+        "build:bash": "rollup -c --file=../../dist/streamdeck-plugin/michel-$npm_package_version",
+        "build:win": "rollup -c --file=../../dist/streamdeck-plugin/michel-%npm_package_version%",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.hoshin-casts.michel-deck\""
     },
     "type": "module",

@@ -11,6 +11,7 @@ function App() {
         <Route path="/game-scene" element={<GameScene />} />
         <Route path="/score-scene" element={<ScoreScene />} />
         <Route path="/casters-scene" element={<CastersScene />} />
+        <Route path="*" element={<ConfigurationCenter />} />
     </Routes>)
 }
 

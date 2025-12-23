@@ -7,9 +7,12 @@
     "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Jane Doe",
+  "author": "Martin 'Hoshin' Bahier",
   "license": "MIT",
   "devDependencies": {
     "electron": "^36.2.0"
+  },
+  "dependencies": {
+    "expressjs": "^1.0.1"
   }
 }

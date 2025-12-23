@@ -2,13 +2,30 @@
   "name": "html-overlays",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "electron-app/main.js",
   "type": "module",
+  "author": "Martin 'Hoshin' Bahier",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "run": "node dist/back/index.js",
-    "electron-start": "electron .",
-    "start:back": "NODE_PATH=./dist/back node index.js"
+    "start:electron": "electron ./electron-app/main.js",
+    "build": "rimraf ./dist && rimraf release-builds && cd back && npm run build && cd ../front/client-app && npm run build && cd ../../ && npx electron-builder && cd ./stream-deck-plugin/michel-deck npm run build:win",
+    "start:back": "cd ./back && npm run start",
+    "start:back:build": "node ./dist/back/index.js",
+    "start:front": "cd ./front/client-app && npm run dev"
+  },
+  "build": {
+    "appId": "com.hoshin-casts-michelectron",
+    "productName": "MICHELectron",
+    "directories": {
+      "output": "release-builds"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-app/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
   },
   "private": true,
   "dependencies": {
@@ -22,7 +39,9 @@
     "@types/express": "^5.0.5",
     "@types/jest": "^30.0.0",
     "electron": "^36.2.0",
+    "electron-builder": "^26.0.12",
     "jest": "^30.1.3",
+    "rimraf": "^6.1.2",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2"
   }
