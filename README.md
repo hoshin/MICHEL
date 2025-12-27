@@ -3,7 +3,6 @@ Management Interface for Casting Hosts Enjoying Lightness
 
 ## Description and purpose
 MICHEL is a personal tool, first and foremost, aimed at helping around someone who'd like to get into casting e-sports matches but feels like there's way too much alt-tabbing going around. It probably won't fit every need, but I'll be glad to accept PRs if it comes to this :)
-I'm publishing it under the [CC-BY-NC](https://creativecommons.org/licenses/by-nc/4.0/) license so that anyone finding it useful can pretty much tune it to their liking if they so desire.
 
 The idea is to set the match up beforehand and then pilot everything through a device like a StreamDeck (or anything that can send calls to the main app)
 
@@ -78,3 +77,6 @@ In order to be able to connect to that instance of `michel-back` with your own f
 
 #### Long story longer
 I wanted to separate concerns as much as possible. Mostly because not everyone has the same taste as I do when it comes to interfaces for a stream
+
+## License
+This work is licensed under the [CC-BY-NC](https://creativecommons.org/licenses/by-nc/4.0/).
