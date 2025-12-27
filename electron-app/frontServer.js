@@ -7,22 +7,11 @@ const port = 5173
 console.log(path.join(__dirname + '/../dist/front/'))
 app.use(express.static(path.join(__dirname + '/../dist/front/')))
 
-app.get('/', (req, res) => {
+// Note: hack to apply wildcard routing, basically handing over any path for the app's router to handle
+app.get('/{*z}', (_, res) => {
     res.sendFile(path.join(__dirname, '/../dist/front/index.html'))
 })
-app.get('/game-scene', (req, res) => {
-    res.sendFile(path.join(__dirname, '/../dist/front/index.html'))
-});
-app.get('/score-scene', (req, res) => {
-    res.sendFile(path.join(__dirname, '/../dist/front/index.html'))
-});
-app.get('/casters-scene', (req, res) => {
-    res.sendFile(path.join(__dirname, '/../dist/front/index.html'))
-});
-app.get('/configuration-center', (req, res) => {
-    res.sendFile(path.join(__dirname, '/../dist/front/index.html'))
-});
 
 app.listen(port, () => {
-    console.log(`Web server listening on port ${port}`);
+    console.log(`Default front-end Web server listening on port ${port}`);
 })

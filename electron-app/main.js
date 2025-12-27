@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, shell} = require('electron')
 const path = require('node:path')
 const { fork }  = require('child_process')
+const {Menu} = require("electron/main");
 const serverProcess = fork(__dirname + '/../dist/back/index')
 const frontServerProcess = fork(__dirname + '/frontServer.js')
 
@@ -18,9 +19,18 @@ if (!app.requestSingleInstanceLock()) {
 
 let win
 
+function quitApp(win) {
+    return async () => {
+        frontServerProcess.kill()
+        serverProcess.kill()
+        app.quit()
+        win = null
+    };
+}
+
 function createWindow() {
     win = new BrowserWindow({
-        icon: path.join(process.env.VITE_PUBLIC, 'logo.svg'), //
+        icon: path.join(__dirname, './images/logo_56.png'), //
         webPreferences: {
             preload: path.join(__dirname, './preload.js'),
             nodeIntegration: false,
@@ -28,6 +38,39 @@ function createWindow() {
             enableRemoteModule: false,
         },
     })
+
+    win.setMenu(Menu.buildFromTemplate(
+        [
+            {
+            label: 'Actions',
+                submenu: [
+                    {
+                        label: 'Quit',
+                        click: quitApp(win)
+                    }
+                ],
+        },
+            {
+            label: 'About',
+                submenu: [
+                    {
+                        label: 'The app',
+                        click: async () => {
+                            const { shell } = require('electron')
+                            await shell.openExternal('https://github.com/hoshin/MICHEL/tree/main?tab=readme-ov-file')
+                        }
+                    },
+                    {
+                        label: 'Martin "Hoshin" Bahier',
+                        click: async () => {
+                            const { shell } = require('electron')
+                            await shell.openExternal('https://hoshin-casts.com')
+                        }
+                    }
+                ]
+
+        }]
+    ))
 
     if (process.env.VITE_DEV_SERVER_URL) {
         win.loadURL(process.env.VITE_DEV_SERVER_URL)
@@ -48,9 +91,6 @@ app.whenReady().then(createWindow)
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-        app.quit()
-        win = null
-        serverProcess.kill()
-        frontServerProcess.kill()
+       quitApp(win)
     }
 })
