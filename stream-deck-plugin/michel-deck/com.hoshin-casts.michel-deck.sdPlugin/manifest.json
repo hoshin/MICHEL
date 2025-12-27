@@ -1,7 +1,7 @@
 {
 	"Name": "michel-deck",
 	"Version": "0.2.0.0",
-	"Author": "hoshin-casts",
+	"Author": "Martin 'Hoshin' Bahier",
 	"Actions": [
 		{
 			"Name": "Score updater",
@@ -9,6 +9,22 @@
 			"Icon": "imgs/actions/counter/icon",
 			"Tooltip": "Calls the M.I.C.H.E.L. API to update a score (increment or decrement by 1)",
 			"PropertyInspectorPath": "ui/increment-counter.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Custom counter updater",
+			"UUID": "com.hoshin-casts.michel-deck.custom-increment",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "Calls the M.I.C.H.E.L. API to update a custom counter (increment or decrement by 1)",
+			"PropertyInspectorPath": "ui/increment-custom-counter.html",
 			"Controllers": [
 				"Keypad"
 			],

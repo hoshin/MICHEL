@@ -5,7 +5,6 @@ import MapSetup from "./components/MapSetup.jsx";
 
 import './ConfigurationCenter.css'
 import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
-import {fetchFaceItMatchUpdates} from "../../../back/handlers/home.js";
 
 const socket = new WebSocket(WEBSOCKET_URL)
 

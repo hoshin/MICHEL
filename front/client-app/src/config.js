@@ -13,6 +13,7 @@ export const DEFAULT_STATE = {
         right: 'team1',
         left: 'team2',
         mapCount: 0,
+        customCounter: 0,
         mapFormat: 'FT3',
         tournamentLogo: '',
         optionalLogoDisplay: true

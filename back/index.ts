@@ -3,31 +3,29 @@ import { WebSocketServer } from 'ws'
 const app = express()
 const port = 3000
 
-import { home, swapTeams, team1IncreaseScore, team1DecreaseScore, team2IncreaseScore, team2DecreaseScore,
-    team1UpdateName, team2UpdateName, decreaseMapCount, increaseMapCount, updateMapFormat,
-    updateTeam1Logo, updateTeam2Logo, updateTournamentLogo, toggleOptionalLogoDisplay, initialMatchDataFromFaceItMatchId,
-    initData, fetchFaceItMatchUpdates
+import {
+    MichelBackService
 } from './handlers/home.js'
 
 let serverSocket = null
-
 const connectionPool = []
+let michelBackService: MichelBackService = new MichelBackService(connectionPool, process.env.DEBUG === 'true')
+
 app.use(express.json())
 
-app.get('/', (req, res) => home(req, res, connectionPool))
-
-app.post('/team1-increase-score', (req, res) => team1IncreaseScore(req, res, connectionPool))
-app.post('/team1-decrease-score', (req, res) => team1DecreaseScore(req, res, connectionPool))
-app.post('/team2-increase-score', (req, res) => team2IncreaseScore(req, res, connectionPool))
-app.post('/team2-decrease-score', (req, res) => team2DecreaseScore(req, res, connectionPool))
-app.post('/increase-map-count', (req, res) => increaseMapCount(req, res, connectionPool))
-app.post('/decrease-map-count', (req, res) => decreaseMapCount(req, res, connectionPool))
-app.post('/swap-teams', (req, res) => swapTeams(req, res, connectionPool))
+app.get('/', (_, res) => michelBackService.home(res))
+app.post('/team1-increase-score', (_, res) => michelBackService.team1IncreaseScore(res))
+app.post('/team1-decrease-score', (_, res) => michelBackService.team1DecreaseScore(res))
+app.post('/team2-increase-score', (_, res) => michelBackService.team2IncreaseScore(res))
+app.post('/team2-decrease-score', (_, res) => michelBackService.team2DecreaseScore(res))
+app.post('/custom-counter-increase', (_, res) => michelBackService.increaseCustomCounter(res))
+app.post('/custom-counter-decrease', (_, res) => michelBackService.decreaseCustomCounter(res))
+app.post('/increase-map-count', (_, res) => michelBackService.increaseMapCount(res))
+app.post('/decrease-map-count', (_, res) => michelBackService.decreaseMapCount(res))
+app.post('/swap-teams', (_, res) => michelBackService.swapTeams(res))
 
 const server = app.listen(port, () => {
-    initData(connectionPool)
-    console.log(`M.I.C.H.E.L. listening on port : ${port}`)
-    // Management Interface for Casting Hosts Enjoying Lightness
+    console.log(`M.I.C.H.E.L. backend service listening on port : ${port}`)
 })
 
 server.on('upgrade', (req, socket, head) => {
@@ -38,30 +36,9 @@ server.on('upgrade', (req, socket, head) => {
 })
 const wsServer = new WebSocketServer({ noServer: true })
 wsServer.on('connection', socket => {
-    connectionPool.push(socket)
+    console.info(`New connection from ${socket.host}`)
+    michelBackService.updateConnectionPool(socket)
     socket.on('message', buffer => {
-        const command = JSON.parse(buffer.toString('utf8'))
-        if(process.env.DEBUG){
-            console.log('[DEBUG] Incoming command: ', command)
-        }
-        switch(command.command){
-            case 'increaseTeam1Score': team1IncreaseScore(null, null, connectionPool);break;
-            case 'increaseTeam2Score': team2IncreaseScore(null, null, connectionPool);break;
-            case 'decreaseTeam1Score': team1DecreaseScore(null, null, connectionPool);break;
-            case 'decreaseTeam2Score': team2DecreaseScore(null, null, connectionPool);break;
-            case 'updateTeam1Name': team1UpdateName(null, null, connectionPool, command.value);break;
-            case 'updateTeam2Name': team2UpdateName(null, null, connectionPool, command.value);break;
-            case 'swapTeams': swapTeams(null, null, connectionPool);break;
-            case 'increaseMapCount': increaseMapCount(null, null, connectionPool);break;
-            case 'decreaseMapCount': decreaseMapCount(null, null, connectionPool);break;
-            case 'updateMapFormat': updateMapFormat(null, null, connectionPool, command.value);break;
-            case 'updateTeam1Logo': updateTeam1Logo(null, null, connectionPool, command.value);break;
-            case 'updateTeam2Logo': updateTeam2Logo(null, null, connectionPool, command.value);break;
-            case 'updateTournamentLogo' : updateTournamentLogo(null, null, connectionPool, command.value);break;
-            case 'toggleOptionalLogoDisplay' : toggleOptionalLogoDisplay(null, null, connectionPool);break;
-            case 'updateFromMatchId': initialMatchDataFromFaceItMatchId(null, null, connectionPool, command.value);break;
-            case 'fetchFaceItMatchUpdates': fetchFaceItMatchUpdates(null, null, connectionPool, command.value); break
-            default: home(null, null, connectionPool)
-        }
+        michelBackService.handleCommand(buffer)
     })
 })

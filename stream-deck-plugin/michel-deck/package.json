@@ -1,12 +1,15 @@
 {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "name": "michel-streamdeck-plugin",
     "description": "A streamdeck plugin with a few functionalities to control the MICHEL back API from a streamdeck",
     "author": "Martin 'Hoshin' Bahier",
     "license": "CC-BY-NC",
     "scripts": {
-        "build:bash": "rollup -c --file=../../dist/streamdeck-plugin/michel-$npm_package_version",
-        "build:win": "rollup -c --file=../../dist/streamdeck-plugin/michel-%npm_package_version%",
+        "build": "rollup -c",
+        "package:bash": "npx streamdeck pack -o ../../dist/streamdeck-plugin/ --version $npm_package_version.0 ./com.hoshin-casts.michel-deck.sdPlugin",
+        "package:win": "npx streamdeck pack -o ../../dist/streamdeck-plugin/ --version %npm_package_version%.0 ./com.hoshin-casts.michel-deck.sdPlugin",
+        "build-and-package:bash": "npm run build && npm run package:bash",
+        "build-and-package:win": "npm run build && npm run package:win" ,
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.hoshin-casts.michel-deck\""
     },
     "type": "module",

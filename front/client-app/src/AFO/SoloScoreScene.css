@@ -1,0 +1,30 @@
+.solo-score {
+    display: flex;
+    justify-content: space-between;
+    font-family: "BigNoodleTitling", sans-serif;
+}
+
+.draws-panel {
+    background-color: #4341ff;
+    max-height: 1.2em;
+}
+
+.left-solo-score {
+    background-image: url('./images/right-bar.png');
+    background-repeat: no-repeat;
+    max-height: 1.2em;
+}
+.right-solo-score {
+    background-image: url('./images/left-bar.png');
+    background-position-x: -555px;
+    max-height: 1.2em;
+    background-repeat: no-repeat;
+}
+
+.right-solo-score span {
+    margin-right: 10px;
+}
+
+.left-solo-score span {
+    margin-left: 10px;
+}
