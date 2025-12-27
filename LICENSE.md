@@ -1,4 +1,4 @@
-License: CC-BY-NC
+License: CC-BY-NC-4.0
 
 # Attribution-NonCommercial 4.0 International
 
