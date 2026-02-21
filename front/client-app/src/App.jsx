@@ -1,10 +1,14 @@
 import { Routes, Route } from "react-router-dom";
 import ConfigurationCenter from "./ConfigurationCenter.jsx";
-import GameScene from "./AFO/GameScene.jsx";
+import GameScene from "./GameScene.jsx";
 import './ConfigurationCenter.css'
-import ScoreScene from "./AFO/ScoreScene.jsx";
+import ScoreScene from "./ScoreScene.jsx";
 import CastersScene from "./Dragons/CastersScene.jsx";
-import SoloScoreScene from "./AFO/SoloScoreScene.jsx";
+import SoloScoreScene from "./SoloScoreScene.jsx";
+// import TeamBanInput from "./TeamBanInput.jsx";
+import TeamScore from "./TeamScore.jsx";
+import CurrentMap from "./CurrentMap.jsx";
+import TeamBan from "./TeamBan.jsx";
 
 function App() {
     return (<Routes>
@@ -12,7 +16,14 @@ function App() {
         <Route path="/game-scene" element={<GameScene />} />
         <Route path="/score-scene" element={<ScoreScene />} />
         <Route path="/casters-scene" element={<CastersScene />} />
+        <Route path="/team-1-score" element={<TeamScore team={1}/>} />
+        <Route path="/team-2-score" element={<TeamScore team={2}/>} />
+        <Route path="/current-map" element={<CurrentMap />} />
+        <Route path="/team-1-ban" element={<TeamBan team={1}/>} />
+        <Route path="/team-2-ban" element={<TeamBan team={2}/>} />
         <Route path="/solo-score-scene" element={<SoloScoreScene />} />
+        {/*<Route path="/team-1-ban-input" element={<TeamBanInput team={1} handler={noop}/>}></Route>*/}
+        {/*<Route path="/team-2-ban-input" element={<TeamBanInput team={2} handler={noop}/>}></Route>*/}
         <Route path="*" element={<ConfigurationCenter />} />
     </Routes>)
 }

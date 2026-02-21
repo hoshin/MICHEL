@@ -1,5 +1,5 @@
 import './MapCount.css'
-import {DEFAULT_LOGO} from "../config.js";
+import {DEFAULT_LOGO} from "./config.js";
 
 export function MapCount(props) {
     const logo =  props.tournamentLogo || DEFAULT_LOGO

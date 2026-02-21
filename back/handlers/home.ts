@@ -1,7 +1,44 @@
 import * as fs from "fs"
-import { Response} from "express"
+import {Response} from "express"
 
-let seriesData = {
+type TeamDescription = {
+    name: string,
+    score: number,
+    logo: string
+}
+type MapFormat = 'FT1' | 'FT2' | 'FT3' | 'FT4' | 'FT5' | 'BO1' | 'BO3' | 'BO5' | 'BO7'
+type GeneralMatchInformation = {
+    right: string,
+    left: string,
+    mapCount: number,
+    customCounter: number,
+    mapFormat: MapFormat,
+    tournamentLogo: string,
+    optionalLogoDisplay: boolean
+}
+type BanData = {
+    heroImage?: string,
+    heroName?: string,
+}
+export type SeriesData = {
+    team1: TeamDescription,
+    team2: TeamDescription,
+    display: GeneralMatchInformation,
+    faceIt: {
+        matchId: string,
+    },
+    standings: {
+        [mapId: string]: {
+            map?: { selectedBy: string, image: string, name: string, },
+            attacker?: { selectedBy: any, attackingFirst: any },
+            bans: {
+                team1: BanData,
+                team2: BanData,
+            }
+        }
+    }
+}
+export const DEFAULT_SERIES_DATA: SeriesData = {
     team1: {
         name: '',
         score: 0,
@@ -24,225 +61,213 @@ let seriesData = {
     faceIt: {
         matchId: '',
     },
-    standings: {
-    }
+    standings: {}
 }
 
 export class MichelBackService {
     private connectionPool: any
     private debug: boolean
-    constructor(connectionPool, debug: boolean) {
+    private seriesData: SeriesData
+
+    constructor(connectionPool, debug: boolean, seriesData?: SeriesData) {
         this.connectionPool = connectionPool
+        this.seriesData = seriesData ?? structuredClone(DEFAULT_SERIES_DATA)
         this.debug = debug
-        try{
+        try {
             const configFile = fs.readFileSync('./back/config.json')
             console.log('Config file present ... updating seriesData!')
             const jsonSeriesConfigurationFromFile = JSON.parse(configFile.toString('utf8')).seriesData
 
-            if(jsonSeriesConfigurationFromFile?.faceIt?.matchId?.length > 0) {
+            if (jsonSeriesConfigurationFromFile?.faceIt?.matchId?.length > 0) {
                 console.log(`FaceIt matchID present in config file! Building series data with it! ${jsonSeriesConfigurationFromFile.faceIt.matchId}`)
                 this.initialMatchDataFromFaceItMatchId(null, jsonSeriesConfigurationFromFile.faceIt.matchId)
             } else {
-                seriesData = jsonSeriesConfigurationFromFile
+                this.seriesData = jsonSeriesConfigurationFromFile
             }
-        } catch (error){
+        } catch (error) {
             console.warn('No config file found! Initializing seriesData with default values.')
             console.warn(error.message)
         }
     }
-    
+
     updateConnectionPool(socket) {
         this.connectionPool.push(socket)
     }
-    
+
     handleCommand(payloadAsBuffer: Buffer) {
         const payload = JSON.parse(payloadAsBuffer.toString('utf8'))
-        if(this.debug){
+        if (this.debug) {
             console.log('[DEBUG] Incoming command: ', payload)
         }
-        switch(payload.command){
-            case 'increaseTeam1Score': this.team1IncreaseScore(null);break;
-            case 'increaseTeam2Score': this.team2IncreaseScore(null);break;
-            case 'decreaseTeam1Score': this.team1DecreaseScore(null);break;
-            case 'decreaseTeam2Score': this.team2DecreaseScore(null);break;
-            case 'updateTeam1Name': this.team1UpdateName(null, payload.value);break;
-            case 'updateTeam2Name': this.team2UpdateName(null, payload.value);break;
-            case 'swapTeams': this.swapTeams(null);break;
-            case 'increaseMapCount': this.increaseMapCount(null);break;
-            case 'decreaseMapCount': this.decreaseMapCount(null);break;
-            case 'updateMapFormat': this.updateMapFormat(null, payload.value);break;
-            case 'updateTeam1Logo': this.updateTeam1Logo(null, payload.value);break;
-            case 'updateTeam2Logo': this.updateTeam2Logo(null, payload.value);break;
-            case 'updateTournamentLogo' : this.updateTournamentLogo(null, payload.value);break;
-            case 'toggleOptionalLogoDisplay' : this.toggleOptionalLogoDisplay(null);break;
-            case 'updateFromMatchId': this.initialMatchDataFromFaceItMatchId(null, payload.value);break;
-            case 'fetchFaceItMatchUpdates': this.fetchFaceItMatchUpdates(null, payload.value); break;
-            case 'increaseCustomCounter': this.increaseCustomCounter(null); break;
-            case 'decreaseCustomCounter': this.decreaseCustomCounter(null); break;
-            default: this.home(null)
+        switch (payload.command) {
+            case 'increaseTeam1Score':
+                this.teamIncrementScore(null, 'team1', 1);
+                break;
+            case 'increaseTeam2Score':
+                this.teamIncrementScore(null, 'team2', 1);
+                break;
+            case 'decreaseTeam1Score':
+                this.teamIncrementScore(null, 'team1', -1);
+                break;
+            case 'decreaseTeam2Score':
+                this.teamIncrementScore(null, 'team2', -1);
+                break;
+            case 'updateTeam1Name':
+                this.teamUpdateName(null, 'team1', payload.value);
+                break;
+            case 'updateTeam2Name':
+                this.teamUpdateName(null, 'team2', payload.value);
+                break;
+            case 'swapTeams':
+                this.swapTeams(null);
+                break;
+            case 'increaseMapCount':
+                this.updateMapCountAndRefreshFaceItDataIfNeeded(null, 1);
+                break;
+            case 'decreaseMapCount':
+                this.updateMapCountAndRefreshFaceItDataIfNeeded(null, -1);
+                break;
+            case 'updateMapFormat':
+                this.updateMapFormat(null, payload.value);
+                break;
+            case 'updateTeam1Logo':
+                this.updateTeamLogo(null, 'team1', payload.value);
+                break;
+            case 'updateTeam2Logo':
+                this.updateTeamLogo(null, 'team2', payload.value);
+                break;
+            case 'updateTournamentLogo' :
+                this.updateTournamentLogo(null, payload.value);
+                break;
+            case 'toggleOptionalLogoDisplay' :
+                this.toggleOptionalLogoDisplay(null);
+                break;
+            case 'updateFromMatchId':
+                this.initialMatchDataFromFaceItMatchId(null, payload.value);
+                break;
+            case 'fetchFaceItMatchUpdates':
+                this.fetchFaceItMatchUpdates(null, payload.value);
+                break;
+            case 'increaseCustomCounter':
+                this.increaseCustomCounter(null);
+                break;
+            case 'decreaseCustomCounter':
+                this.decreaseCustomCounter(null);
+                break;
+            case 'team1UpdateBan':
+                this.teamUpdateBan(null, 'team1', payload.value);
+                break;
+            case 'team2UpdateBan':
+                this.teamUpdateBan(null, 'team2', payload.value);
+                break;
+            default:
+                this.home(null)
         }
     }
-    
+
     home(res: Response) {
         this.sendUpdatedStateToCaller(res)
     }
-    
+
     sendUpdatedStateToCaller(res: Response) {
         if (res && !res.headersSent) {
-            res.json(seriesData)
+            res.json(this.seriesData)
         }
         if (this.connectionPool) {
             this.connectionPool.forEach(socket => {
-                socket.send(JSON.stringify(seriesData))
+                socket.send(JSON.stringify(this.seriesData))
             })
         }
     }
 
     swapTeams = (res: Response) => {
-        const rightTeam = seriesData.display.right
-        const leftTeam = seriesData.display.left
-        seriesData.display.right = leftTeam
-        seriesData.display.left = rightTeam
-        if(this.debug){
+        const rightTeam = this.seriesData.display.right
+        const leftTeam = this.seriesData.display.left
+        this.seriesData.display.right = leftTeam
+        this.seriesData.display.left = rightTeam
+        if (this.debug) {
             console.log('swapTeams')
         }
 
         this.sendUpdatedStateToCaller(res)
-        // this.sendUpdatedStateToCaller(res)
     }
 
-    team1IncreaseScore = (res: Response) => {
-        seriesData.team1.score++
-        if(this.debug){
-            console.log('team1IncreaseScore')
+    teamIncrementScore(res: Response, teamName: string, increment: number = 1) {
+        const candidateScore = this.seriesData[teamName].score + increment
+        this.seriesData[teamName].score = candidateScore >= 0 ? candidateScore : 0
+        if (this.debug) {
+            console.log(`${teamName} increment score by ${increment}`)
         }
-
         this.sendUpdatedStateToCaller(res)
     }
 
-    team2IncreaseScore = (res: Response) => {
-        seriesData.team2.score++
-        if(this.debug){
-            console.log('team2IncreaseScore')
+    teamUpdateName(res: Response, team: string = 'team1', newName: string) {
+        if (team === 'team1' || team === 'team2') {
+            this.seriesData[team].name = newName
+            if (this.debug) {
+                console.log(`${team} update name to ${newName}`)
+            }
         }
-
         this.sendUpdatedStateToCaller(res)
     }
 
-
-    team1DecreaseScore = (res: Response) => {
-        if(seriesData.team1.score>0){
-            seriesData.team1.score--
-        }
-        if(this.debug){
-            console.log('team1DecreaseScore')
-        }
-
-        this.sendUpdatedStateToCaller(res)
-    }
-
-    team2DecreaseScore = (res: Response) => {
-        if(seriesData.team2.score>0) {
-            seriesData.team2.score--
-        }
-        if(this.debug){
-            console.log('team2DecreaseScore')
-        }
-
-        this.sendUpdatedStateToCaller(res)
-    }
-
-    team1UpdateName = (res: Response, newName: string) => {
-        seriesData.team1.name = newName
-        if(this.debug){
-            console.log('team1UpdateName')
-        }
-
-        this.sendUpdatedStateToCaller(res)
-    }
-
-    team2UpdateName = (res: Response, newName: string) => {
-        seriesData.team2.name = newName
-        if(this.debug){
-            console.log('team2UpdateName')
-        }
-
-        this.sendUpdatedStateToCaller(res)
-    }
-
-    updateMapFormat = (res: Response, newFormat: string) => {
-        seriesData.display.mapFormat = newFormat
-        if(this.debug){
+    updateMapFormat = (res: Response, newFormat: MapFormat) => {
+        this.seriesData.display.mapFormat = newFormat
+        if (this.debug) {
             console.log('updateMapFormat')
         }
 
         this.sendUpdatedStateToCaller(res)
     }
 
-    updateTeam1Logo = (res: Response, newLogo: string) => {
-        seriesData.team1.logo = newLogo
-        if(this.debug){
-            console.log('updateTeam1Logo')
-        }
-
-        this.sendUpdatedStateToCaller(res)
-    }
-
     updateTournamentLogo = (res: Response, newLogo: string) => {
-        seriesData.display.tournamentLogo = newLogo
-        if(this.debug){
+        this.seriesData.display.tournamentLogo = newLogo
+        if (this.debug) {
             console.log('updateTournamentLogo')
         }
 
         this.sendUpdatedStateToCaller(res)
     }
 
-    updateTeam2Logo = (res: Response, newLogo: string) => {
-        seriesData.team2.logo = newLogo
-        if(this.debug){
-            console.log('updateTeam2Logo')
+    updateTeamLogo = (res: Response, team: string, newLogo: string) => {
+        if (team === 'team1' || team === 'team2') {
+            this.seriesData[team].logo = newLogo
+            if (this.debug) {
+                console.log('updateTeam1Logo')
+            }
         }
 
         this.sendUpdatedStateToCaller(res)
     }
 
     toggleOptionalLogoDisplay = (res: Response) => {
-        seriesData.display.optionalLogoDisplay = !seriesData.display.optionalLogoDisplay
-        if(this.debug){
+        this.seriesData.display.optionalLogoDisplay = !this.seriesData.display.optionalLogoDisplay
+        if (this.debug) {
             console.log('toggleOptionalLogoDisplay')
         }
 
         this.sendUpdatedStateToCaller(res)
     }
 
-    increaseMapCount = (res: Response) => {
-        seriesData.display.mapCount++
-        if(this.debug){
-            console.log('increaseMapCount')
-        }
-        if(!seriesData.faceIt[`match${seriesData.display.mapCount}`]) {
-            this.fetchFaceItMatchUpdates(res, seriesData.display.mapCount)
-        } else {
+    updateMapCountAndRefreshFaceItDataIfNeeded = (res: Response, increment: number = 1) => {
+        const candidate = this.seriesData.display.mapCount + increment
+        if (candidate === this.seriesData.display.mapCount) {
             this.sendUpdatedStateToCaller(res)
-        }
-    }
-
-    decreaseMapCount = (res: Response) => {
-        if(seriesData.display.mapCount>1){
-            seriesData.display.mapCount--
-        }
-        if(this.debug){
-            console.log('decreaseMapCount')
-        }
-        if(!seriesData.faceIt[`match${seriesData.display.mapCount}`]) {
-            this.fetchFaceItMatchUpdates(res, seriesData.display.mapCount)
         } else {
-            this.sendUpdatedStateToCaller(res)
+            this.seriesData.display.mapCount = candidate > 0 ? candidate : 1
+            if (this.debug) {
+                console.log(`increase map count by ${increment}`)
+            }
+            if (!this.seriesData.standings[`match${this.seriesData.display.mapCount}`]) {
+                this.fetchFaceItMatchUpdates(res, this.seriesData.display.mapCount)
+            } else {
+                this.sendUpdatedStateToCaller(res)
+            }
         }
     }
 
     initialMatchDataFromFaceItMatchId = (res: Response, matchId: string) => {
-        if(! matchId){
+        if (!matchId) {
             return
         }
         fetch(`https://www.faceit.com/api/match/v2/match/${matchId}`, {
@@ -266,56 +291,55 @@ export class MichelBackService {
             }
         })
             .then(response => {
-                if(response.status !== 200) {
+                if (response.status !== 200) {
                     return
                 }
                 response.json().then(jsonData => {
-                    if(jsonData?.payload?.teams) {
-                        const { faction1, faction2 } = jsonData.payload.teams
+                    if (jsonData?.payload?.teams) {
+                        const {faction1, faction2} = jsonData.payload.teams
 
-                        seriesData.team1.name = faction1.name
-                        seriesData.team2.name = faction2.name
+                        this.seriesData.team1.name = faction1.name
+                        this.seriesData.team2.name = faction2.name
 
-                        seriesData.team1.logo = faction1.avatar
-                        seriesData.team2.logo = faction2.avatar
+                        this.seriesData.team1.logo = faction1.avatar
+                        this.seriesData.team2.logo = faction2.avatar
 
-                        seriesData.faceIt.matchId = matchId
+                        this.seriesData.faceIt.matchId = matchId
                     }
 
                     this.sendUpdatedStateToCaller(res)
-                    return seriesData
+                    return this.seriesData
                 })
 
             })
-            .catch(error => seriesData)
-            .finally(() => seriesData)
-        if(this.debug) {
+            .catch(error => this.seriesData)
+            .finally(() => this.seriesData)
+        if (this.debug) {
             console.log(`updateFromMatchId ${matchId}`)
         }
-        return seriesData
+        return this.seriesData
     }
 
     increaseCustomCounter = (res: Response) => {
-        seriesData.display.customCounter++
-        if(this.debug){
+        this.seriesData.display.customCounter++
+        if (this.debug) {
             console.log('increaseCustomCount')
         }
         this.sendUpdatedStateToCaller(res)
     }
 
     decreaseCustomCounter = (res: Response) => {
-        seriesData.display.customCounter--
-        if(this.debug){
+        this.seriesData.display.customCounter--
+        if (this.debug) {
             console.log('decreaseCustomCount')
         }
         this.sendUpdatedStateToCaller(res)
     }
 
     updatedLobbyDataFromFaceItMatchId = async (matchId: string, mapNumber: number, next: () => void) => {
-        if(!matchId){
+        if (!matchId) {
             return
         }
-        // console.log('updatedLobbyDataFromFaceItMatchId', matchId, mapNumber)
         return fetch(`https://www.faceit.com/api/democracy/v1/match/${matchId}`, {
             method: 'GET',
             headers: {
@@ -338,36 +362,35 @@ export class MichelBackService {
             }
         })
             .then(response => {
-                if(response.status !== 200) {
+                if (response.status !== 200) {
                     throw new Error(`Response status not 200 : ${response.status}`)
                 }
                 response.json().then(jsonData => {
-                    if(jsonData?.payload && jsonData.payload.tickets && jsonData.payload.tickets.length >0) {
+                    if (jsonData?.payload && jsonData.payload.tickets && jsonData.payload.tickets.length > 0) {
                         const availableMaps = jsonData.payload.tickets.filter(ticket => ticket.entity_type === 'map')
                         const attackingFirst = jsonData.payload.tickets.filter(ticket => ticket.entity_type === 'attacking_first')
                         const heroes = jsonData.payload.tickets.filter(ticket => ticket.entity_type === 'heroes')
-                        for(let i = 0; i < mapNumber*3;i+=3){
-                            const availableMap = availableMaps[mapNumber-1]
-                            if(availableMap){
+                        for (let i = 0; i < mapNumber * 3; i += 3) {
+                            const availableMap = availableMaps[mapNumber - 1]
+                            if (availableMap) {
                                 const pickedMap = availableMap.entities.filter(entity => entity.status === 'pick')[0]
-                                if(pickedMap){
+                                if (pickedMap) {
                                     const map = {
                                         selectedBy: pickedMap.selected_by,
                                         image: pickedMap.properties.image_lg,
                                         name: pickedMap.properties.class_name,
                                     }
-                                    const attackerItem = attackingFirst[mapNumber-1].entities.filter(entity => entity.status === 'pick')[0]
+                                    const attackerItem = attackingFirst[mapNumber - 1].entities.filter(entity => entity.status === 'pick')[0]
                                     const attacker = {
                                         selectedBy: attackerItem.selected_by,
                                         attackingFirst: attackerItem.properties.game_attacking_first_id,
                                     }
-                                    const bans = heroes[mapNumber-1].entities.filter(entity => entity.status === 'drop').map(drop => ({
+                                    const bans = heroes[mapNumber - 1].entities.filter(entity => entity.status === 'drop').map(drop => ({
                                         selectingTeam: drop.selected_by,
                                         heroName: drop.properties.name,
                                         heroImage: drop.properties.image_lg,
                                     }))
-                                    //console.log(`Picks / bans round #${mapNumber}`, map, attacker, bans)
-                                    seriesData.standings[`match${mapNumber}`] = {
+                                    this.seriesData.standings[`match${mapNumber}`] = {
                                         map,
                                         attacker,
                                         bans: {
@@ -390,8 +413,8 @@ export class MichelBackService {
 
     fetchFaceItMatchUpdates = (res: Response, mapNumber: number) => {
         try {
-            if(seriesData?.faceIt?.matchId.length > 0) {
-                this.updatedLobbyDataFromFaceItMatchId(seriesData?.faceIt?.matchId, mapNumber, () => {
+            if (this.seriesData?.faceIt?.matchId.length > 0) {
+                this.updatedLobbyDataFromFaceItMatchId(this.seriesData?.faceIt?.matchId, mapNumber, () => {
                     this.sendUpdatedStateToCaller(res)
                 })
             } else {
@@ -403,5 +426,49 @@ export class MichelBackService {
             this.sendUpdatedStateToCaller(res)
         }
     }
-    
+
+    teamUpdateBan(res: Response, teamName: string, banName: string) {
+        if (teamName === 'team1') {
+            return this.team1UpdateBan(res, banName)
+        }
+        return this.team2UpdateBan(res, banName)
+    }
+
+    team1UpdateBan(res: Response, bannedHeroName: string) {
+        const roundStandings = this.seriesData.standings[`match${this.seriesData.display.mapCount}`]
+        if (!roundStandings) {
+            this.seriesData.standings[`match${this.seriesData.display.mapCount}`] = {
+                bans: {
+                    team1: {},
+                    team2: {}
+                }
+            }
+        }
+        this.seriesData.standings[`match${this.seriesData.display.mapCount}`].bans.team1.heroImage = bannedHeroName
+        if (this.debug) {
+            console.log('team1UpdateBan', bannedHeroName)
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    team2UpdateBan(res: Response, bannedHeroName: string) {
+        const roundStandings = this.seriesData.standings[`match${this.seriesData.display.mapCount}`]
+        if (!roundStandings) {
+            this.seriesData.standings[`match${this.seriesData.display.mapCount}`] = {
+                bans: {
+                    team1: {},
+                    team2: {}
+                }
+            }
+        }
+        this.seriesData.standings[`match${this.seriesData.display.mapCount}`].bans.team2.heroImage = bannedHeroName
+        if (this.debug) {
+            console.log('team1UpdateBan', bannedHeroName)
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    getSeriesData(): SeriesData {
+        return this.seriesData
+    }
 }

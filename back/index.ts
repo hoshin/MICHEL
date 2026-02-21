@@ -14,14 +14,14 @@ let michelBackService: MichelBackService = new MichelBackService(connectionPool,
 app.use(express.json())
 
 app.get('/', (_, res) => michelBackService.home(res))
-app.post('/team1-increase-score', (_, res) => michelBackService.team1IncreaseScore(res))
-app.post('/team1-decrease-score', (_, res) => michelBackService.team1DecreaseScore(res))
-app.post('/team2-increase-score', (_, res) => michelBackService.team2IncreaseScore(res))
-app.post('/team2-decrease-score', (_, res) => michelBackService.team2DecreaseScore(res))
+app.post('/team1-increase-score', (_, res) => michelBackService.teamIncrementScore(res, 'team1', 1))
+app.post('/team1-decrease-score', (_, res) => michelBackService.teamIncrementScore(res, 'team1', -1))
+app.post('/team2-increase-score', (_, res) => michelBackService.teamIncrementScore(res, 'team2', 1))
+app.post('/team2-decrease-score', (_, res) => michelBackService.teamIncrementScore(res, 'team2', -1))
 app.post('/custom-counter-increase', (_, res) => michelBackService.increaseCustomCounter(res))
 app.post('/custom-counter-decrease', (_, res) => michelBackService.decreaseCustomCounter(res))
-app.post('/increase-map-count', (_, res) => michelBackService.increaseMapCount(res))
-app.post('/decrease-map-count', (_, res) => michelBackService.decreaseMapCount(res))
+app.post('/increase-map-count', (_, res) => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, 1))
+app.post('/decrease-map-count', (_, res) => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, -1))
 app.post('/swap-teams', (_, res) => michelBackService.swapTeams(res))
 
 const server = app.listen(port, () => {

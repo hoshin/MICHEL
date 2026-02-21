@@ -9,7 +9,7 @@
   "scripts": {
     "test": "npx jest",
     "build": "npx tsc --project tsconfig.json",
-    "start": "node index.js"
+    "start": "exit 1 #have a working local start"
   },
   "private": true,
   "dependencies": {

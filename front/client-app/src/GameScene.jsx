@@ -3,7 +3,7 @@ import './GameScene.css'
 import LeftBar from "./LeftBar.jsx";
 import RightBar from "./RightBar.jsx";
 import { MapCount } from "./MapCount.jsx";
-import {DEFAULT_STATE, WEBSOCKET_URL} from "../config.js";
+import {DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
 
 
 const socket = new WebSocket(WEBSOCKET_URL)
@@ -25,6 +25,7 @@ function GameScene() {
     const { right, mapCount, mapFormat, tournamentLogo } = teamsData.display
     const { standings } = teamsData
     const bansToShow = !!standings[`match${mapCount}`]
+
     if(bansToShow){
         console.log(mapCount, standings)
     }
@@ -34,14 +35,14 @@ function GameScene() {
         <div className="fullscreen">
           { originalOrder ? <>
               <div className="header">
-                  <LeftBar teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team1.heroImage}/>
-                  <RightBar teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team2.heroImage}/>
+                  <LeftBar teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team1}/>
+                  <RightBar teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team2}/>
               </div>
           </> :
           <>
               <div className="header">
-                  <LeftBar teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team2.heroImage}/>
-                  <RightBar teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team1.heroImage}/>
+                  <LeftBar teamName={team2Name} teamLogo={team2Logo} teamScore={team2Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team2}/>
+                  <RightBar teamName={team1Name} teamLogo={team1Logo} teamScore={team1Score} teamBan={bansToShow && standings[`match${mapCount}`].bans.team1}/>
               </div>
           </> }
         <div className="footer">

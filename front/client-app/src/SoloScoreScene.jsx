@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import './SoloScoreScene.css'
 
-import { DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL } from "../config.js";
+import { DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL } from "./config.js";
 
 const socket = new WebSocket(WEBSOCKET_URL)
 

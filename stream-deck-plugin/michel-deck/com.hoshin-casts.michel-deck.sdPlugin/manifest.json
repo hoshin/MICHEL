@@ -1,12 +1,12 @@
 {
 	"Name": "michel-deck",
-	"Version": "0.2.0.0",
+	"Version": "0.2.1.0",
 	"Author": "Martin 'Hoshin' Bahier",
 	"Actions": [
 		{
 			"Name": "Score updater",
 			"UUID": "com.hoshin-casts.michel-deck.increment",
-			"Icon": "imgs/actions/counter/icon",
+			"Icon": "imgs/actions/score/icon",
 			"Tooltip": "Calls the M.I.C.H.E.L. API to update a score (increment or decrement by 1)",
 			"PropertyInspectorPath": "ui/increment-counter.html",
 			"Controllers": [
@@ -14,7 +14,7 @@
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/actions/score/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -22,7 +22,7 @@
 		{
 			"Name": "Custom counter updater",
 			"UUID": "com.hoshin-casts.michel-deck.custom-increment",
-			"Icon": "imgs/actions/counter/icon",
+			"Icon": "imgs/actions/custom-counter/icon",
 			"Tooltip": "Calls the M.I.C.H.E.L. API to update a custom counter (increment or decrement by 1)",
 			"PropertyInspectorPath": "ui/increment-custom-counter.html",
 			"Controllers": [
@@ -30,7 +30,7 @@
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/actions/custom-counter/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -38,7 +38,7 @@
 		{
 			"Name": "Map count updater",
 			"UUID": "com.hoshin-casts.michel-deck.map-counter",
-			"Icon": "imgs/actions/counter/icon",
+			"Icon": "imgs/actions/round/icon",
 			"Tooltip": "",
 			"PropertyInspectorPath": "ui/map-counter.html",
 			"Controllers": [
@@ -46,7 +46,7 @@
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/actions/round/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -54,7 +54,7 @@
 		{
 			"Name": "Side Toggler",
 			"UUID": "com.hoshin-casts.michel-deck.toggle",
-			"Icon": "imgs/actions/counter/icon",
+			"Icon": "imgs/actions/swap/icon",
 			"Tooltip": "",
 			"PropertyInspectorPath": "ui/toggle.html",
 			"Controllers": [
@@ -62,7 +62,7 @@
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/actions/swap/key",
 					"TitleAlignment": "middle"
 				}
 			]

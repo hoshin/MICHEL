@@ -2,7 +2,7 @@ import { useState } from 'react'
 import './ScoreScene.css'
 import RightScore from "./RightScore.jsx";
 import LeftScore from "./LeftScore.jsx";
-import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "../config.js";
+import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
 
 
 const socket = new WebSocket(WEBSOCKET_URL)

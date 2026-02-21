@@ -10,12 +10,12 @@
 }
 
 .left-solo-score {
-    background-image: url('./images/right-bar.png');
+    background-image: url('images/right-bar.png');
     background-repeat: no-repeat;
     max-height: 1.2em;
 }
 .right-solo-score {
-    background-image: url('./images/left-bar.png');
+    background-image: url('images/left-bar.png');
     background-position-x: -555px;
     max-height: 1.2em;
     background-repeat: no-repeat;
