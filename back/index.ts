@@ -36,7 +36,6 @@ server.on('upgrade', (req, socket, head) => {
 })
 const wsServer = new WebSocketServer({ noServer: true })
 wsServer.on('connection', socket => {
-    console.info(`New connection from ${socket.host}`)
     michelBackService.updateConnectionPool(socket)
     socket.on('message', buffer => {
         michelBackService.handleCommand(buffer)

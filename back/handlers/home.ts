@@ -174,6 +174,12 @@ export class MichelBackService {
             res.json(this.seriesData)
         }
         if (this.connectionPool) {
+            const connectionPoolWithonlyUnclosedSockets = this.connectionPool.filter(socket => !socket._closeFrameReceived)
+            if(this.connectionPool.length !== connectionPoolWithonlyUnclosedSockets.length) {
+                console.info(`Connection pool cleanup (remove closing / closed sockets): Base - ${this.connectionPool.length} => New - ${connectionPoolWithonlyUnclosedSockets.length}`)
+                this.connectionPool = connectionPoolWithonlyUnclosedSockets
+            }
+
             this.connectionPool.forEach(socket => {
                 socket.send(JSON.stringify(this.seriesData))
             })
