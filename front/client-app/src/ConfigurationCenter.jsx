@@ -1,23 +1,12 @@
-import { useState } from 'react'
 import './components/TeamForm.jsx'
 import {TeamForm} from "./components/TeamForm.jsx";
 import MapSetup from "./components/MapSetup.jsx";
 
 import './ConfigurationCenter.css'
-import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
+import {DEFAULT_LOGO} from "./config.js";
 import {portraits} from "./TeamBanInput.jsx";
 import {Card, Flex, Table} from "antd";
-
-const socket = new WebSocket(WEBSOCKET_URL)
-
-socket.addEventListener('open', event => {
-    socket.send(JSON.stringify({ init: 1}) )
-})
-
-let setTeamsDataWS = () => {}
-socket.addEventListener('message', event => {
-    setTeamsDataWS(JSON.parse(event.data))
-})
+import WSWrapper from "./WSWrapper.jsx";
 
 function copyURI(evt) {
     evt.preventDefault();
@@ -143,11 +132,7 @@ const data = [
     }
 ]
 
-function ConfigurationCenter() {
-    const [teamsData, setTeamsData] = useState(DEFAULT_STATE)
-
-    setTeamsDataWS = setTeamsData
-
+const render = (teamsData, socket) => {
     const sendCommandHandler = (command) => (event) => {
         event.preventDefault()
         socket.send(JSON.stringify({ command, value: event.target.value }) )
@@ -242,6 +227,10 @@ function ConfigurationCenter() {
             </Flex>
         </Flex>
     )
+}
+
+function ConfigurationCenter() {
+    return <WSWrapper renderFunction={render}/>
 }
 
 export default ConfigurationCenter
