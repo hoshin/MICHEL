@@ -1,11 +1,24 @@
-import WSWrapper from "./WSWrapper.jsx";
+import {DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
+import {useState} from "react";
 
-const render = (teamsData, socket, ownProps) => {
-    return <span>{teamsData[`team${ownProps.team}`].score}</span>
-}
+const socket = new WebSocket(WEBSOCKET_URL)
+
+socket.addEventListener('open', event => {
+    socket.send(JSON.stringify({ init: 1}) )
+})
+
+let setTeamsDataWS = () => {}
+socket.addEventListener('message', event => {
+    setTeamsDataWS(JSON.parse(event.data))
+})
 
 function TeamScore(props) {
-    return <WSWrapper renderFunction={render} componentProps={props}/>
+    const [teamsData, setTeamsData] = useState(DEFAULT_STATE)
+    setTeamsDataWS = setTeamsData
+
+    return (
+        <span>{teamsData[`team${props.team}`].score}</span>
+    )
 }
 
 export default TeamScore;

@@ -1,15 +1,34 @@
+import { useState } from 'react'
 import './GameScene.css'
 import LeftBar from "./LeftBar.jsx";
 import RightBar from "./RightBar.jsx";
 import { MapCount } from "./MapCount.jsx";
-import WSWrapper from "./WSWrapper.jsx";
+import {DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
 
-const render = (teamsData) => {
+
+const socket = new WebSocket(WEBSOCKET_URL)
+
+socket.addEventListener('open', event => {
+    socket.send(JSON.stringify({ init: 1}) )
+})
+
+let setTeamsDataWS = () => {}
+socket.addEventListener('message', event => {
+    setTeamsDataWS(JSON.parse(event.data))
+})
+
+function GameScene() {
+    const [teamsData, setTeamsData] = useState(DEFAULT_STATE)
+    setTeamsDataWS = setTeamsData
     const { score: team1Score, name: team1Name, logo: team1Logo } = teamsData.team1
     const { score: team2Score, name: team2Name, logo: team2Logo } = teamsData.team2
     const { right, mapCount, mapFormat, tournamentLogo } = teamsData.display
     const { standings } = teamsData
     const bansToShow = !!standings[`match${mapCount}`]
+
+    if(bansToShow){
+        console.log(mapCount, standings)
+    }
 
     const originalOrder = right === 'team1'
     return (
@@ -31,10 +50,6 @@ const render = (teamsData) => {
         </div>
       </div>
     )
-}
-
-function GameScene() {
-    return <WSWrapper renderFunction={render}/>
 }
 
 export default GameScene;
