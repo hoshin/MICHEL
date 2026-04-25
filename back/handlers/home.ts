@@ -1,6 +1,9 @@
 import * as fs from "fs"
 import {Response} from "express"
 
+import pino from 'pino'
+import type { Logger } from "pino"
+
 type TeamDescription = {
     name: string,
     score: number,
@@ -26,6 +29,7 @@ export type SeriesData = {
     display: GeneralMatchInformation,
     faceIt: {
         matchId: string,
+        raw?: any
     },
     standings: {
         [mapId: string]: {
@@ -64,22 +68,47 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
     standings: {}
 }
 
+let apiKey = process.env.FACEIT_KEY
+
+process.env.MICH_LOG_PATH='./'
+
 export class MichelBackService {
     private connectionPool: any
     private debug: boolean
     private seriesData: SeriesData
+    private logger: Logger
 
-    constructor(connectionPool, debug: boolean, seriesData?: SeriesData) {
+    constructor(connectionPool, debug: boolean, seriesData?: SeriesData, logger?: Logger) {
         this.connectionPool = connectionPool
         this.seriesData = seriesData ?? structuredClone(DEFAULT_SERIES_DATA)
         this.debug = debug
+
+        const fileTransport = pino.transport({
+            target: 'pino/file',
+            options: { destination: `${process.env.MICH_LOG_PATH}/app.log` },
+        })
+
+        this.logger = pino(
+            {
+                level: process.env.PINO_LOG_LEVEL || 'info',
+                formatters: {
+                    level: (label) => {
+                        return { level: label.toUpperCase() }
+                    },
+                },
+                timestamp: pino.stdTimeFunctions.isoTime,
+            },
+            fileTransport
+        )
+
         try {
             const configFile = fs.readFileSync('./back/config.json')
-            console.log('Config file present ... updating seriesData!')
+            this.logger.info('Config file present ... updating seriesData!')
             const jsonSeriesConfigurationFromFile = JSON.parse(configFile.toString('utf8')).seriesData
-
+            apiKey = jsonSeriesConfigurationFromFile.faceIt.apiKey
+            // this.logger.info(`API key? ${apiKey}`)
             if (jsonSeriesConfigurationFromFile?.faceIt?.matchId?.length > 0) {
-                console.log(`FaceIt matchID present in config file! Building series data with it! ${jsonSeriesConfigurationFromFile.faceIt.matchId}`)
+                this.logger.info(`FaceIt matchID present in config file! Building series data with it! ${jsonSeriesConfigurationFromFile.faceIt.matchId}`)
                 this.initialMatchDataFromFaceItMatchId(null, jsonSeriesConfigurationFromFile.faceIt.matchId)
             } else {
                 this.seriesData = jsonSeriesConfigurationFromFile
@@ -97,7 +126,7 @@ export class MichelBackService {
     handleCommand(payloadAsBuffer: Buffer) {
         const payload = JSON.parse(payloadAsBuffer.toString('utf8'))
         if (this.debug) {
-            console.log('[DEBUG] Incoming command: ', payload)
+            this.logger.info({ msg: '[DEBUG] Incoming command: ', payload})
         }
         switch (payload.command) {
             case 'increaseTeam1Score':
@@ -175,7 +204,7 @@ export class MichelBackService {
         }
         if (this.connectionPool) {
             const connectionPoolWithonlyUnclosedSockets = this.connectionPool.filter(socket => !socket._closeFrameReceived)
-            if(this.connectionPool.length !== connectionPoolWithonlyUnclosedSockets.length) {
+            if (this.connectionPool.length !== connectionPoolWithonlyUnclosedSockets.length) {
                 console.info(`Connection pool cleanup (remove closing / closed sockets): Base - ${this.connectionPool.length} => New - ${connectionPoolWithonlyUnclosedSockets.length}`)
                 this.connectionPool = connectionPoolWithonlyUnclosedSockets
             }
@@ -192,7 +221,7 @@ export class MichelBackService {
         this.seriesData.display.right = leftTeam
         this.seriesData.display.left = rightTeam
         if (this.debug) {
-            console.log('swapTeams')
+            this.logger.info('swapTeams')
         }
 
         this.sendUpdatedStateToCaller(res)
@@ -202,7 +231,7 @@ export class MichelBackService {
         const candidateScore = this.seriesData[teamName].score + increment
         this.seriesData[teamName].score = candidateScore >= 0 ? candidateScore : 0
         if (this.debug) {
-            console.log(`${teamName} increment score by ${increment}`)
+            this.logger.info(`${teamName} increment score by ${increment}`)
         }
         this.sendUpdatedStateToCaller(res)
     }
@@ -211,7 +240,7 @@ export class MichelBackService {
         if (team === 'team1' || team === 'team2') {
             this.seriesData[team].name = newName
             if (this.debug) {
-                console.log(`${team} update name to ${newName}`)
+                this.logger.info(`${team} update name to ${newName}`)
             }
         }
         this.sendUpdatedStateToCaller(res)
@@ -220,7 +249,7 @@ export class MichelBackService {
     updateMapFormat = (res: Response, newFormat: MapFormat) => {
         this.seriesData.display.mapFormat = newFormat
         if (this.debug) {
-            console.log('updateMapFormat')
+            this.logger.info('updateMapFormat')
         }
 
         this.sendUpdatedStateToCaller(res)
@@ -229,7 +258,7 @@ export class MichelBackService {
     updateTournamentLogo = (res: Response, newLogo: string) => {
         this.seriesData.display.tournamentLogo = newLogo
         if (this.debug) {
-            console.log('updateTournamentLogo')
+            this.logger.info('updateTournamentLogo')
         }
 
         this.sendUpdatedStateToCaller(res)
@@ -239,7 +268,7 @@ export class MichelBackService {
         if (team === 'team1' || team === 'team2') {
             this.seriesData[team].logo = newLogo
             if (this.debug) {
-                console.log('updateTeam1Logo')
+                this.logger.info('updateTeam1Logo')
             }
         }
 
@@ -249,7 +278,7 @@ export class MichelBackService {
     toggleOptionalLogoDisplay = (res: Response) => {
         this.seriesData.display.optionalLogoDisplay = !this.seriesData.display.optionalLogoDisplay
         if (this.debug) {
-            console.log('toggleOptionalLogoDisplay')
+            this.logger.info('toggleOptionalLogoDisplay')
         }
 
         this.sendUpdatedStateToCaller(res)
@@ -257,13 +286,15 @@ export class MichelBackService {
 
     updateMapCountAndRefreshFaceItDataIfNeeded = (res: Response, increment: number = 1) => {
         const candidate = this.seriesData.display.mapCount + increment
+        this.logger.info({msg: '[MBA] updateMapCountAndRefreshFaceItDataIfNeeded', mapCount: this.seriesData.display.mapCount})
         if (candidate === this.seriesData.display.mapCount) {
             this.sendUpdatedStateToCaller(res)
         } else {
             this.seriesData.display.mapCount = candidate > 0 ? candidate : 1
             if (this.debug) {
-                console.log(`increase map count by ${increment}`)
+                this.logger.info(`increase map count by ${increment}`)
             }
+            // mapCount [1, +Infinity[
             if (!this.seriesData.standings[`match${this.seriesData.display.mapCount}`]) {
                 this.fetchFaceItMatchUpdates(res, this.seriesData.display.mapCount)
             } else {
@@ -273,36 +304,31 @@ export class MichelBackService {
     }
 
     initialMatchDataFromFaceItMatchId = (res: Response, matchId: string) => {
+        // this.logger.info('[MBA] initialMatchDataFromFaceItMatchId', matchId)
         if (!matchId) {
             return
         }
-        fetch(`https://www.faceit.com/api/match/v2/match/${matchId}`, {
+        fetch(`https://open.faceit.com/data/v4/matches/${matchId}`, {
             method: 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0',
-                Accept: 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br, zstd',
-                Referer: `https://www.faceit.com/en/ow2/room/${matchId}`,
-                'faceit-referer': 'web-next',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin',
-                Connection: 'keep-alive',
-                'Alt-Used': 'www.faceit.com',
-                DNT: '1',
-                'Sec-GPC': '1',
-                Pragma: 'no-cache',
-                'Cache-Control': 'no-cache'
+                'Authorization': `Bearer ${apiKey}`,
+                'Accept': 'application/json',
             }
         })
             .then(response => {
                 if (response.status !== 200) {
+                    this.logger.info({msg:'[MBA] FaceIt status', status: response.status, json: JSON.stringify(response, null, 2)})
                     return
                 }
                 response.json().then(jsonData => {
-                    if (jsonData?.payload?.teams) {
-                        const {faction1, faction2} = jsonData.payload.teams
+                    // this.logger.info('[MBA] initialMatchDataFromFaceItMatchId', JSON.stringify(jsonData, null, 2))
+                    this.logger.info({
+                        msg: 'FaceIt match data querying',
+                        jsonData
+                    })
+                    if (jsonData?.teams) {
+                        const faction1 = jsonData.teams.faction1
+                        const faction2 = jsonData.teams.faction2
 
                         this.seriesData.team1.name = faction1.name
                         this.seriesData.team2.name = faction2.name
@@ -311,17 +337,25 @@ export class MichelBackService {
                         this.seriesData.team2.logo = faction2.avatar
 
                         this.seriesData.faceIt.matchId = matchId
+                        this.seriesData.faceIt.raw = jsonData
+                        this.logger.info({
+                            msg: '1st FaceIt match data querying (teams)',
+                            length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
+                            entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
+                            heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
+                            voting: this.seriesData?.faceIt?.raw?.voting,
+                            raw: this.seriesData?.faceIt?.raw
+                        })
                     }
 
                     this.sendUpdatedStateToCaller(res)
                     return this.seriesData
                 })
-
             })
             .catch(error => this.seriesData)
             .finally(() => this.seriesData)
         if (this.debug) {
-            console.log(`updateFromMatchId ${matchId}`)
+            this.logger.info(`updateFromMatchId ${matchId}`)
         }
         return this.seriesData
     }
@@ -329,7 +363,7 @@ export class MichelBackService {
     increaseCustomCounter = (res: Response) => {
         this.seriesData.display.customCounter++
         if (this.debug) {
-            console.log('increaseCustomCount')
+            this.logger.info('increaseCustomCount')
         }
         this.sendUpdatedStateToCaller(res)
     }
@@ -337,7 +371,7 @@ export class MichelBackService {
     decreaseCustomCounter = (res: Response) => {
         this.seriesData.display.customCounter--
         if (this.debug) {
-            console.log('decreaseCustomCount')
+            this.logger.info('decreaseCustomCount')
         }
         this.sendUpdatedStateToCaller(res)
     }
@@ -346,25 +380,11 @@ export class MichelBackService {
         if (!matchId) {
             return
         }
-        return fetch(`https://www.faceit.com/api/democracy/v1/match/${matchId}`, {
+        fetch(`https://www.faceit.com/api/democracy/v1/match/${matchId}/history`, {
             method: 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0',
-                Accept: 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br, zstd',
-                Referer: `https://www.faceit.com/en/ow2/room/${matchId}`,
-                'faceit-referer': 'web-next',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin',
-                Connection: 'keep-alive',
-                'Alt-Used': 'www.faceit.com',
-                DNT: '1',
-                'Sec-GPC': '1',
-                Pragma: 'no-cache',
-                'Cache-Control': 'no-cache',
-                Priority: 'u=4'
+                //'Authorization': `Bearer ${apiKey}`,
+                'Accept': 'application/json',
             }
         })
             .then(response => {
@@ -372,37 +392,65 @@ export class MichelBackService {
                     throw new Error(`Response status not 200 : ${response.status}`)
                 }
                 response.json().then(jsonData => {
-                    if (jsonData?.payload && jsonData.payload.tickets && jsonData.payload.tickets.length > 0) {
-                        const availableMaps = jsonData.payload.tickets.filter(ticket => ticket.entity_type === 'map')
-                        const attackingFirst = jsonData.payload.tickets.filter(ticket => ticket.entity_type === 'attacking_first')
-                        const heroes = jsonData.payload.tickets.filter(ticket => ticket.entity_type === 'heroes')
-                        for (let i = 0; i < mapNumber * 3; i += 3) {
-                            const availableMap = availableMaps[mapNumber - 1]
-                            if (availableMap) {
-                                const pickedMap = availableMap.entities.filter(entity => entity.status === 'pick')[0]
-                                if (pickedMap) {
-                                    const map = {
-                                        selectedBy: pickedMap.selected_by,
-                                        image: pickedMap.properties.image_lg,
-                                        name: pickedMap.properties.class_name,
-                                    }
-                                    const attackerItem = attackingFirst[mapNumber - 1].entities.filter(entity => entity.status === 'pick')[0]
-                                    const attacker = {
-                                        selectedBy: attackerItem.selected_by,
-                                        attackingFirst: attackerItem.properties.game_attacking_first_id,
-                                    }
-                                    const bans = heroes[mapNumber - 1].entities.filter(entity => entity.status === 'drop').map(drop => ({
-                                        selectingTeam: drop.selected_by,
-                                        heroName: drop.properties.name,
-                                        heroImage: drop.properties.image_lg,
-                                    }))
-                                    this.seriesData.standings[`match${mapNumber}`] = {
-                                        map,
-                                        attacker,
-                                        bans: {
-                                            team1: bans.filter(ban => ban.selectingTeam === 'faction1')[0],
-                                            team2: bans.filter(ban => ban.selectingTeam === 'faction2')[0],
-                                        }
+                    this.logger.info({
+                        msg: 'UpdateLobbyDataFromFaceItMatchId',
+                        jsonData
+                    })
+                    const voting = jsonData?.payload?.tickets.filter(ticket => ticket.entity_type === 'heroes')
+                    // mapNumber => [1, +Infinity[
+                    if (voting?.[mapNumber - 1] !== undefined) {
+                        const votesForMap = voting[mapNumber - 1]
+                        // ?
+                        if (votesForMap.entities && votesForMap.entities.length > 0) {
+                            return
+                        }
+                        const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
+                            guid: bannedPick.guid,
+                            selected_by: bannedPick.selected_by,
+                            round: bannedPick.round,
+                        }))
+
+                        // this.logger.info(`[MBA] bannedHeroes ${mapNumber}`, JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities, null, 2))
+                        const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
+                        // this.logger.info('[MBA] bannedHeroes data', JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid)), null, 2))
+                        let filteredHeroDataForMap
+                        try{
+                            if(!this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
+                                // force lookup
+                                this.logger.info({
+                                    msg: 'Not all required data for votes is present => requerying',
+                                        length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
+                                        entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
+                                        heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
+                                        voting: this.seriesData?.faceIt?.raw?.voting,
+                                        raw: this.seriesData?.faceIt?.raw
+                                })
+
+                                // control flow issue => should be fast enough but no guarantee
+                                this.initialMatchDataFromFaceItMatchId(null, matchId)
+                            }
+                            if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
+                                filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
+                            }
+                        } catch (error){
+                            this.logger.error({msg:'Attempted to get filteredHeroDataForMap and crashed', error})
+                            next()
+                        }
+                        const team1Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction1')[0]
+                        const team2Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction2')[0]
+                        // this.logger.info('[MBA] filteredHeroDataForMap', JSON.stringify(filteredHeroDataForMap, null, 2))
+                        const heroDataForTeam1Ban = filteredHeroDataForMap.filter(ban => team1Ban.guid === ban.guid)[0]
+                        const heroDataForTeam2Ban = filteredHeroDataForMap.filter(ban => team2Ban.guid === ban.guid)[0]
+                        if (heroDataForTeam1Ban && heroDataForTeam2Ban) {
+                            this.seriesData.standings[`match${mapNumber}`] = {
+                                bans: {
+                                    team1: {
+                                        heroImage: heroDataForTeam1Ban.image_lg,
+                                        heroName: heroDataForTeam1Ban.name
+                                    },
+                                    team2: {
+                                        heroImage: heroDataForTeam2Ban.image_lg,
+                                        heroName: heroDataForTeam2Ban.name
                                     }
                                 }
                             }
@@ -410,6 +458,11 @@ export class MichelBackService {
                     }
                     next()
                 })
+                    .catch(error => {
+                        console.error('Error fetching faceit match details (bans)')
+                        console.error(error)
+                        next()
+                    })
             })
             .catch(error => {
                 console.error(`Could not update lobby data using FaceIt match id ${matchId}`, error)
@@ -424,7 +477,7 @@ export class MichelBackService {
                     this.sendUpdatedStateToCaller(res)
                 })
             } else {
-                console.log('No faceIt matchId present.')
+                this.logger.info('No faceIt matchId present.')
                 this.sendUpdatedStateToCaller(res)
             }
         } catch (error) {
@@ -452,7 +505,7 @@ export class MichelBackService {
         }
         this.seriesData.standings[`match${this.seriesData.display.mapCount}`].bans.team1.heroImage = bannedHeroName
         if (this.debug) {
-            console.log('team1UpdateBan', bannedHeroName)
+            this.logger.info({ msg: 'team1UpdateBan', bannedHeroName})
         }
         this.sendUpdatedStateToCaller(res)
     }
@@ -469,7 +522,7 @@ export class MichelBackService {
         }
         this.seriesData.standings[`match${this.seriesData.display.mapCount}`].bans.team2.heroImage = bannedHeroName
         if (this.debug) {
-            console.log('team1UpdateBan', bannedHeroName)
+            this.logger.info({ msg: 'team1UpdateBan', bannedHeroName})
         }
         this.sendUpdatedStateToCaller(res)
     }
