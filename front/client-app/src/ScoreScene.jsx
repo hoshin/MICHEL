@@ -2,7 +2,7 @@ import { useState } from 'react'
 import './ScoreScene.css'
 import RightScore from "./RightScore.jsx";
 import LeftScore from "./LeftScore.jsx";
-import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
+import {DEFAULT_LOGO, DEFAULT_STATE, FACEIT_LOGO, WEBSOCKET_URL} from "./config.js";
 
 
 const socket = new WebSocket(WEBSOCKET_URL)
@@ -22,7 +22,7 @@ function ScoreScene() {
     const { score: team1Score, name: team1Name, logo: team1Logo } = teamsData.team1
     const { score: team2Score, name: team2Name, logo: team2Logo } = teamsData.team2
     const { right, mapCount, mapFormat, tournamentLogo, optionalLogoDisplay } = teamsData.display
-    const logo = tournamentLogo || DEFAULT_LOGO
+    const logo = tournamentLogo.startsWith('faceit')? FACEIT_LOGO : tournamentLogo ?? DEFAULT_LOGO
     console.log(logo, optionalLogoDisplay, tournamentLogo)
     const originalOrder = right === 'team1'
   return (

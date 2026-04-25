@@ -1,8 +1,8 @@
 import './MapCount.css'
-import {DEFAULT_LOGO} from "./config.js";
+import {DEFAULT_LOGO, FACEIT_LOGO} from "./config.js";
 
 export function MapCount(props) {
-    const logo =  props.tournamentLogo || DEFAULT_LOGO
+    const logo =  props.tournamentLogo.startsWith('faceit')? FACEIT_LOGO : props.tournamentLogo ?? DEFAULT_LOGO
     const {mapCount, mapFormat} = props
     return <div className="middle" >
         <div className="map-count-block">

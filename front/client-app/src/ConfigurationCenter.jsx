@@ -4,7 +4,7 @@ import {TeamForm} from "./components/TeamForm.jsx";
 import MapSetup from "./components/MapSetup.jsx";
 
 import './ConfigurationCenter.css'
-import {DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL} from "./config.js";
+import {DEFAULT_LOGO, DEFAULT_STATE, FACEIT_LOGO, WEBSOCKET_URL} from "./config.js";
 import {portraits} from "./TeamBanInput.jsx";
 import {Card, Flex, Table} from "antd";
 
@@ -140,6 +140,12 @@ const data = [
         name: 'Team 2 Ban (input)',
         url: '/team-2-ban-input',
         profile: 'Input',
+    },
+    {
+        key: '13',
+        name: 'Tournament Logo',
+        url: '/tournament-logo',
+        profile: 'Display, Match production',
     }
 ]
 
@@ -163,8 +169,8 @@ function ConfigurationCenter() {
     const { faceIt } = teamsData
 
     const { standings } = teamsData
-    const logo = tournamentLogo || DEFAULT_LOGO
-
+    const logo =
+        tournamentLogo?.startsWith('faceit') ? FACEIT_LOGO : tournamentLogo || DEFAULT_LOGO
     const bansToShow = !!standings?.[`match${mapCount}`]
     let team1BanForCurrentMap = undefined
     let team2BanForCurrentMap = undefined
