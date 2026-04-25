@@ -1,4 +1,5 @@
 import defaultLogo from './assets/misc_logos/logo_112.png'
+import faceits8Logo from './assets/misc_logos/faceit-s8.png'
 export const DEFAULT_STATE = {
     team1: {
         name: '',
@@ -35,5 +36,5 @@ export const DEFAULT_STATE = {
 }
 
 export const DEFAULT_LOGO = defaultLogo
-
+export const FACEIT_LOGO = faceits8Logo
 export const WEBSOCKET_URL = 'ws://localhost:3000'
