@@ -33,6 +33,7 @@ import ramatra from './assets/portraits/ramatra.png'
 import reaper from './assets/portraits/reaper.png'
 import reinhardt from './assets/portraits/reinhardt.png'
 import roadhog from './assets/portraits/roadhog.png'
+import sierra from './assets/portraits/sierra.png'
 import sigma from './assets/portraits/sigma.png'
 import sojourn from './assets/portraits/sojourn.png'
 import soldier76 from './assets/portraits/soldier-76.png'
@@ -55,59 +56,60 @@ export const portraits = {
     ana,
     anran,
     ashe,
-    baptiste ,
+    baptiste,
     bastion,
-    brigitte ,
-    cassidy ,
-    dva ,
+    brigitte,
+    cassidy,
+    dva,
     domina,
-    doomfist ,
-    echo ,
+    doomfist,
+    echo,
     emre,
-    freja ,
-    genji ,
-    hanzo ,
-    hazard ,
-    illari ,
+    freja,
+    genji,
+    hanzo,
+    hazard,
+    illari,
     jetpackCat,
-    junkerQueen ,
-    junkrat ,
-    juno ,
-    kiriko ,
-    lifeweaver ,
+    junkerQueen,
+    junkrat,
+    juno,
+    kiriko,
+    lifeweaver,
     lucio,
-    mauga ,
+    mauga,
     mei,
     mercy,
     mizuki,
-    moira ,
+    moira,
     orisa,
-    pharah ,
-    ramatra ,
+    pharah,
+    ramatra,
     reaper,
     reinhardt,
     roadhog,
-    sigma ,
-    sojourn ,
-    soldier76 ,
+    sierra,
+    sigma,
+    sojourn,
+    soldier76,
     sombra,
-    symmetra ,
-    torbjorn ,
-    tracer ,
-    vendetta ,
+    symmetra,
+    torbjorn,
+    tracer,
+    vendetta,
     venture,
     widowmaker,
-    winston ,
+    winston,
     wreckingBall,
     wuyang,
-    zarya ,
+    zarya,
     zenyatta,
     none
 }
 
 const updateBanForTeam = (value, team, handler) => {
     const command = team === 'team1' ? 'team1UpdateBan' : 'team2UpdateBan'
-    handler({ command, value})
+    handler({command, value})
 }
 
 function TeamBanInput(props) {
@@ -116,14 +118,17 @@ function TeamBanInput(props) {
         label: name.split('/')[4]
     }))
     let selectedValue
-    if(props.selected){
+    if (props.selected) {
         const selectMatch = (props.selected.match(/\/([a-z0-9\-\_]+)\.png/))
-        if(selectMatch){
+        if (selectMatch) {
             selectedValue = selectMatch[1]
         }
     }
     return <div>
-       <Select placeholder={'Ban for the current map...'} value={selectedValue} onChange={(value) => updateBanForTeam(value, props.team, props.handler)} options={nameOptions} style={{width: '230px'}}/>
+        <Select showSearch={{optionFilterProp: 'value'}}
+                placeholder={'Ban for the current map...'} value={selectedValue}
+                onChange={(value) => updateBanForTeam(value, props.team, props.handler)} options={nameOptions}
+                style={{width: '230px'}}/>
     </div>
 }
 
