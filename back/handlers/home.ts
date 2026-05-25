@@ -297,6 +297,7 @@ export class MichelBackService {
             // mapCount [1, +Infinity[
             if (!this.seriesData.standings[`match${this.seriesData.display.mapCount}`]) {
                 this.fetchFaceItMatchUpdates(res, this.seriesData.display.mapCount)
+                this.sendUpdatedStateToCaller(res)
             } else {
                 this.sendUpdatedStateToCaller(res)
             }
@@ -308,7 +309,7 @@ export class MichelBackService {
         if (!matchId) {
             return
         }
-        fetch(`https://open.faceit.com/data/v4/matches/${matchId}`, {
+        return fetch(`https://open.faceit.com/data/v4/matches/${matchId}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -351,13 +352,13 @@ export class MichelBackService {
                     this.sendUpdatedStateToCaller(res)
                     return this.seriesData
                 })
+                if (this.debug) {
+                    this.logger.info(`updateFromMatchId ${matchId}`)
+                }
+                return this.seriesData
             })
             .catch(error => this.seriesData)
             .finally(() => this.seriesData)
-        if (this.debug) {
-            this.logger.info(`updateFromMatchId ${matchId}`)
-        }
-        return this.seriesData
     }
 
     increaseCustomCounter = (res: Response) => {
@@ -380,100 +381,130 @@ export class MichelBackService {
         if (!matchId) {
             return
         }
-        fetch(`https://www.faceit.com/api/democracy/v1/match/${matchId}/history`, {
+        return fetch(`https://www.faceit.com/api/democracy/v1/match/${matchId}/history`, {
             method: 'GET',
             headers: {
                 //'Authorization': `Bearer ${apiKey}`,
                 'Accept': 'application/json',
             }
         })
-            .then(response => {
-                if (response.status !== 200) {
-                    throw new Error(`Response status not 200 : ${response.status}`)
-                }
-                response.json().then(jsonData => {
-                    this.logger.info({
-                        msg: 'UpdateLobbyDataFromFaceItMatchId',
-                        jsonData
+        .then(response => {
+            if (response.status !== 200) {
+                throw new Error(`Response status not 200 : ${response.status}`)
+            }
+            response.json().then(jsonData => {
+
+                const heroVotingPerMap = jsonData?.payload?.tickets.filter(ticket => ticket.entity_type === 'heroes')
+                this.logger.info({
+                    msg: 'UpdateLobbyDataFromFaceItMatchId',
+                    jsonData: JSON.stringify(jsonData),
+                    map: mapNumber-1,
+                    heroVotingPerMapLength: heroVotingPerMap.length,
+                    heroVotingForCurrentMap: heroVotingPerMap?.[mapNumber -1]
+                })
+                // mapNumber => [1, +Infinity[
+                if (heroVotingPerMap?.[mapNumber - 1] !== undefined) {
+                    const votesForMap = heroVotingPerMap[mapNumber - 1]
+                    // ?
+                    console.log('votesForMap', {
+                        votesForMap,
                     })
-                    const voting = jsonData?.payload?.tickets.filter(ticket => ticket.entity_type === 'heroes')
-                    // mapNumber => [1, +Infinity[
-                    if (voting?.[mapNumber - 1] !== undefined) {
-                        const votesForMap = voting[mapNumber - 1]
-                        // ?
-                        if (votesForMap.entities && votesForMap.entities.length > 0) {
-                            return
-                        }
-                        const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
-                            guid: bannedPick.guid,
-                            selected_by: bannedPick.selected_by,
-                            round: bannedPick.round,
-                        }))
+                    if (!votesForMap.entities || votesForMap.entities.length <= 0) {
+                        console.log('votesForMap has no entities')
+                        return
+                    }
+                    const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
+                        guid: bannedPick.guid,
+                        selected_by: bannedPick.selected_by,
+                        round: bannedPick.round,
+                    }))
+                    console.log({
+                        msg: 'list of banned heroes',
+                        bannedHeroes: bannedHeroes,
+                    })
+                    // this.logger.info(`[MBA] bannedHeroes ${mapNumber}`, JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities, null, 2))
+                    const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
+                    console.log({
+                        msg: 'list of guids to lookup',
+                        bannedHeroes: bannedHeroes,
+                    })
+                    // this.logger.info('[MBA] bannedHeroes data', JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid)), null, 2))
+                    let filteredHeroDataForMap
+                    try{
+                        if(!this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
+                            // force lookup
+                            console.log({
+                                msg: 'Not all required data for votes is present => requerying',
+                                    length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
+                                    entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
+                                    heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
+                                    voting: this.seriesData?.faceIt?.raw?.voting,
+                                    raw: this.seriesData?.faceIt?.raw
+                            })
 
-                        // this.logger.info(`[MBA] bannedHeroes ${mapNumber}`, JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities, null, 2))
-                        const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
-                        // this.logger.info('[MBA] bannedHeroes data', JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid)), null, 2))
-                        let filteredHeroDataForMap
-                        try{
-                            if(!this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
-                                // force lookup
-                                this.logger.info({
-                                    msg: 'Not all required data for votes is present => requerying',
-                                        length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
-                                        entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
-                                        heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
-                                        voting: this.seriesData?.faceIt?.raw?.voting,
-                                        raw: this.seriesData?.faceIt?.raw
-                                })
-
-                                // control flow issue => should be fast enough but no guarantee
-                                this.initialMatchDataFromFaceItMatchId(null, matchId)
-                            }
-                            if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
-                                filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
-                            }
-                        } catch (error){
-                            this.logger.error({msg:'Attempted to get filteredHeroDataForMap and crashed', error})
-                            next()
+                            // control flow issue => should be fast enough but no guarantee
+                            this.initialMatchDataFromFaceItMatchId(null, matchId)
                         }
-                        const team1Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction1')[0]
-                        const team2Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction2')[0]
-                        // this.logger.info('[MBA] filteredHeroDataForMap', JSON.stringify(filteredHeroDataForMap, null, 2))
-                        const heroDataForTeam1Ban = filteredHeroDataForMap.filter(ban => team1Ban.guid === ban.guid)[0]
-                        const heroDataForTeam2Ban = filteredHeroDataForMap.filter(ban => team2Ban.guid === ban.guid)[0]
-                        if (heroDataForTeam1Ban && heroDataForTeam2Ban) {
-                            this.seriesData.standings[`match${mapNumber}`] = {
-                                bans: {
-                                    team1: {
-                                        heroImage: heroDataForTeam1Ban.image_lg,
-                                        heroName: heroDataForTeam1Ban.name
-                                    },
-                                    team2: {
-                                        heroImage: heroDataForTeam2Ban.image_lg,
-                                        heroName: heroDataForTeam2Ban.name
-                                    }
+                        if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
+                            filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
+                            console.log('have a list of heroes we can filter for target map', {
+                                filteredHeroes: filteredHeroDataForMap,
+                            })
+                        }
+                        console.log('filteredHeroDataForMap END, hopefully we hit an update branch before')
+                    } catch (error){
+                        console.error({msg:'Attempted to get filteredHeroDataForMap and crashed', error})
+                        next()
+                    }
+                    const team1Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction1')[0]
+                    const team2Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction2')[0]
+
+                    // this.logger.info('[MBA] filteredHeroDataForMap', JSON.stringify(filteredHeroDataForMap, null, 2))
+                    const heroDataForTeam1Ban = filteredHeroDataForMap.filter(ban => team1Ban.guid === ban.guid)[0]
+                    const heroDataForTeam2Ban = filteredHeroDataForMap.filter(ban => team2Ban.guid === ban.guid)[0]
+                    console.log('BANS?', {
+                        jsonData:
+                        bannedHeroes,
+                        filteredHeroDataForMap,
+                        team1Ban,
+                        team2Ban,
+                        heroDataForTeam1Ban,
+                        heroDataForTeam2Ban
+                    })
+                    if (heroDataForTeam1Ban && heroDataForTeam2Ban) {
+                        this.seriesData.standings[`match${mapNumber}`] = {
+                            bans: {
+                                team1: {
+                                    heroImage: heroDataForTeam1Ban.image_lg,
+                                    heroName: heroDataForTeam1Ban.name
+                                },
+                                team2: {
+                                    heroImage: heroDataForTeam2Ban.image_lg,
+                                    heroName: heroDataForTeam2Ban.name
                                 }
                             }
                         }
                     }
-                    next()
-                })
-                    .catch(error => {
-                        console.error('Error fetching faceit match details (bans)')
-                        console.error(error)
-                        next()
-                    })
-            })
-            .catch(error => {
-                console.error(`Could not update lobby data using FaceIt match id ${matchId}`, error)
+                }
                 next()
             })
+                .catch(error => {
+                    console.error('Error fetching faceit match details (bans)')
+                    console.error(error)
+                    next()
+                })
+        })
+        .catch(error => {
+            console.error(`Could not update lobby data using FaceIt match id ${matchId}`, error)
+            next()
+        })
     }
 
     fetchFaceItMatchUpdates = (res: Response, mapNumber: number) => {
         try {
             if (this.seriesData?.faceIt?.matchId.length > 0) {
                 this.updatedLobbyDataFromFaceItMatchId(this.seriesData?.faceIt?.matchId, mapNumber, () => {
+                    // console.log('next called')
                     this.sendUpdatedStateToCaller(res)
                 })
             } else {
