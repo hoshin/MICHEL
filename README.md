@@ -1,6 +1,17 @@
 # M.I.C.H.E.L.
 Management Interface for Casting Hosts Enjoying Lightness
 
+## Foreword / Caution
+
+THIS IS NOT PRODUCTION READY - I cannot stress that enough
+
+This is still very much a personal tool, with all the issues that come with it. I am building it as I go, following the requirements of the moment, but I feel that it can start being a tool to play around for others also.
+This still has plenty of kinks, but it works fine for me at this point. I still want to add features, upgrade the code, harden it, do a better job at testing everything ... but it displays the information I need and reacts correctly, without crashing, during my casts :')
+
+THIS IS NOT PRODUCTION READY - ... one more for the road
+
+This README is a bit out of date but the bigger pieces are there. If you're interested in this but cannot quite figure how to get it running : I'm interested and will do my best to help (providing we can manage time).
+
 ## Description and purpose
 MICHEL is a personal tool, first and foremost, aimed at helping around someone who'd like to get into casting e-sports matches but feels like there's way too much alt-tabbing going around. It probably won't fit every need, but I'll be glad to accept PRs if it comes to this :)
 
