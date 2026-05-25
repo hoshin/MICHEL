@@ -1,23 +1,23 @@
 .left-cast-bar {
-    display: flex;
-    background-image: url('images/left-bar.png');
-    background-repeat: no-repeat;
-    height:60px;
-    width: 400px;
-    background-position-x: -270px;
-    background-color: white;
-    justify-content: space-between;
-    font-family: "BigNoodleTitling", sans-serif;
-    margin-right: 20px;
+  display: flex;
+  background-image: url("images/left-bar.png");
+  background-repeat: no-repeat;
+  height: 60px;
+  width: 400px;
+  background-position-x: -270px;
+  background-color: white;
+  justify-content: space-between;
+  font-family: "BigNoodleTitling", sans-serif;
+  margin-right: 20px;
 }
 .left-cast-score {
-    margin-right: 20px;
+  margin-right: 20px;
 }
 .left-cast-logo {
-    right:15px;
+  right: 15px;
 }
 
 .left-cast-bar > p {
-    text-align: right;
-    padding-left: 5%;
+  text-align: right;
+  padding-left: 5%;
 }

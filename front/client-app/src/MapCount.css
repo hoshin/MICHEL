@@ -1,21 +1,21 @@
 .middle-text {
-    position: fixed;
-    margin-top: 8px;
-    font-family: "BigNoodleTitling", sans-serif;
-    font-size: 1.5em;
+  position: fixed;
+  margin-top: 8px;
+  font-family: "BigNoodleTitling", sans-serif;
+  font-size: 1.5em;
 }
 
 .tournament-logo {
-    position: relative;
-    top:-85px;
-    width: 30%;
-    left:1px;
-    max-height: 85px;
-    object-fit: contain;
+  position: relative;
+  top: -85px;
+  width: 30%;
+  left: 1px;
+  max-height: 85px;
+  object-fit: contain;
 }
 
 .map-count-block {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }

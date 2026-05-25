@@ -1,45 +1,45 @@
 .team-layout {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-evenly;
-    border:1px solid slategray;
-    border-radius: 5px;
-    background-color: #a1a1a1;
-    margin: 1rem;
-    padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  border: 1px solid slategray;
+  border-radius: 5px;
+  background-color: #a1a1a1;
+  margin: 1rem;
+  padding: 0.5rem;
 }
 
 .team-layout .line {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
 }
 
 .line {
-    height: 30px;
-    margin-top: 0.5rem;
-    margin-bottom: 0.5rem;
+  height: 30px;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .line div {
-    text-align: left;
+  text-align: left;
 }
 
 .sub-line {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
 }
 
 .line.header {
-    height: 60px;
+  height: 60px;
 }
 
 .button {
-    width: 30px;
-    height: 30px;
-    font-weight: 600;
-    background-color: dimgray;
+  width: 30px;
+  height: 30px;
+  font-weight: 600;
+  background-color: dimgray;
 }
 
 /*.score{*/
@@ -48,10 +48,10 @@
 /*}*/
 
 .section-name {
-    width: 4rem;
+  width: 4rem;
 }
 
 .team-logo-img {
-    width: 50px;
-    height: 50px;
+  width: 50px;
+  height: 50px;
 }

@@ -1,4 +1,7 @@
-@font-face { font-family: BigNoodleTitling; src: url('./assets/big_noodle_titling.ttf'); }
+@font-face {
+  font-family: BigNoodleTitling;
+  src: url("./assets/big_noodle_titling.ttf");
+}
 
 :root {
   font-family: Roboto, sans-serif;
