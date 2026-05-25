@@ -3,23 +3,27 @@
     "team1": {
       "name": "",
       "score": 0,
-      "logo": ""
+      "logo": "<web accessible URL to a logo>"
     },
     "team2": {
       "name": "",
       "score": 0,
-      "logo": ""
+      "logo": "<web accessible URL to a logo>"
     },
-  "display": {
+    "display": {
       "right": "team1",
       "left": "team2",
       "mapCount": 1,
       "mapFormat": "FT3",
-      "tournamentLogo": "",
+      "tournamentLogo": "<web accessible URL to a logo>",
       "optionalLogoDisplay": true
     },
     "faceIt": {
-      "matchId": ""
-    }
-  }
+      "matchId": "",
+      "tournamentLogo": "<web accessible URL to a logo>",
+      "apiKey": "<FaceIt's developer API key>"
+    },
+    "standings": {}
+  },
+  "link": ""
 }
