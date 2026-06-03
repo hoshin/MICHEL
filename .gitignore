@@ -5,3 +5,4 @@ coverage
 com.*.streamDeckPlugin
 stream-deck-plugin/com.hoshin-casts.michel-deck.streamDeckPlugin/bin
 back/config.json
+*.log
