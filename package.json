@@ -15,6 +15,7 @@
     "build:streamdeck-plugin": "cd stream-deck-plugin/michel-deck && npm run build-and-package:win",
     "build:electron-app": "npx electron-builder",
     "build:all": "npm run build:clean && npm run build:back && npm run build:front && npm run build:streamdeck-plugin && npm run build:electron-app",
+    "start": "npm run build:back && npm run build:front && concurrently \"npm run start:back:build\" \"npm run start:front\"",
     "start:back": "cd ./back && npm run start",
     "start:back:build": "node ./dist/back/index.js",
     "start:front": "cd ./front/client-app && npm run dev"
@@ -47,6 +48,7 @@
     "@jest/globals": "^30.2.0",
     "@types/express": "^5.0.5",
     "@types/jest": "^30.0.0",
+    "concurrently": "^10.0.3",
     "electron": "^36.9.5",
     "electron-builder": "^26.0.12",
     "jest": "^30.1.3",
