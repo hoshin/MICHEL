@@ -3,9 +3,7 @@ import ConfigurationCenter from "./ConfigurationCenter.jsx";
 import GameScene from "./GameScene.jsx";
 import "./ConfigurationCenter.css";
 import ScoreScene from "./ScoreScene.jsx";
-import CastersScene from "./Dragons/CastersScene.jsx";
 import SoloScoreScene from "./SoloScoreScene.jsx";
-// import TeamBanInput from "./TeamBanInput.jsx";
 import TeamScore from "./TeamScore.jsx";
 import CurrentMap from "./CurrentMap.jsx";
 import TeamBan from "./TeamBan.jsx";
@@ -17,7 +15,6 @@ function App() {
       <Route path="/configuration-center" element={<ConfigurationCenter />} />
       <Route path="/game-scene" element={<GameScene />} />
       <Route path="/score-scene" element={<ScoreScene />} />
-      <Route path="/casters-scene" element={<CastersScene />} />
       <Route path="/team-1-score" element={<TeamScore team={1} />} />
       <Route path="/team-2-score" element={<TeamScore team={2} />} />
       <Route path="/current-map" element={<CurrentMap />} />
