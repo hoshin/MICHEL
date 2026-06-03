@@ -1,6 +1,7 @@
 import "./components/TeamForm.jsx";
 import { TeamForm } from "./components/TeamForm.jsx";
 import MapSetup from "./components/MapSetup.jsx";
+import CountdownTimer, { notifyCountdown } from "./components/CountdownTimer.jsx";
 
 import "./ConfigurationCenter.css";
 import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
@@ -9,6 +10,7 @@ import { Card, Flex, Table } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useTeamsData } from "./teamsDataSocket.ts";
 import ConnectionBadge from "./components/ConnectionBadge.jsx";
+import { PlayCircleOutlined, PauseCircleOutlined } from "@ant-design/icons";
 
 function copyURI(evt) {
   evt.preventDefault();
@@ -128,27 +130,27 @@ const data = [
   },
   {
     key: "10",
-    name: "Casters Scene",
-    url: "/casters-scene",
-    profile: "Display, Sample",
-  },
-  {
-    key: "11",
     name: "Team 1 Ban (input)",
     url: "/team-1-ban-input",
     profile: "Input",
   },
   {
-    key: "12",
+    key: "11",
     name: "Team 2 Ban (input)",
     url: "/team-2-ban-input",
     profile: "Input",
   },
   {
-    key: "13",
+    key: "12",
     name: "Tournament Logo",
     url: "/tournament-logo",
     profile: "Display, Match production",
+  },
+  {
+    key: "13",
+    name: "Countdown Timer",
+    url: "/countdown",
+    profile: "Display",
   },
 ];
 
@@ -216,6 +218,10 @@ const RESYNC_NOTICE_DURATION_MS = 3000;
 function ConfigurationCenter() {
   const { teamsData, status, send, consumeCatchupIntent } = useTeamsData();
   const [resyncNotice, setResyncNotice] = useState(null);
+  const [timerValue, setTimerValue] = useState(60);
+  const [running, setRunning] = useState(false);
+  const countdownRef = useRef(null);
+  const currentRef = useRef(null);
   // Track the previous status so we can detect the transition into `open`
   // that follows a disconnect (i.e. a reconnect) and fire a catchup. We
   // use a ref rather than state because we don't want this transition
@@ -253,7 +259,45 @@ function ConfigurationCenter() {
     );
     return () => clearTimeout(timer);
   }, [resyncNotice]);
+    const runInterval = (from) => {
+        currentRef.current = from;
+        notifyCountdown(from);
+        setRunning(true);
+        countdownRef.current = setInterval(() => {
+            currentRef.current = currentRef.current <= 1 ? 0 : currentRef.current - 1;
+            notifyCountdown(currentRef.current);
+            if (currentRef.current === 0) {
+                clearInterval(countdownRef.current);
+                countdownRef.current = null;
+                setRunning(false);
+            }
+        }, 1000);
+    };
 
+    const startStopCountdown = () => {
+        if (countdownRef.current) {
+            // Currently running — pause it
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+            setRunning(false);
+        } else if (currentRef.current !== null && currentRef.current > 0) {
+            // Currently paused — resume from where we left off
+            runInterval(currentRef.current);
+        } else {
+            // Idle — start fresh
+            runInterval(timerValue);
+        }
+    };
+
+    const resetCountdown = () => {
+        if (countdownRef.current) {
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+        }
+        currentRef.current = null;
+        setRunning(false);
+        notifyCountdown(timerValue);
+    };
   const sendCommandHandler = (command) => (event) => {
     event.preventDefault();
     send({ command, value: event.target.value });
@@ -390,7 +434,7 @@ function ConfigurationCenter() {
               defaultValue={logo}
             />
             <div className="logo-preview">
-              {!!logo ? <img height="60px" src={logo}></img> : null}
+              {logo ? <img height="60px" src={logo}></img> : null}
               <div>Show in mini-score</div>
               <input
                 type="checkbox"
@@ -428,6 +472,61 @@ function ConfigurationCenter() {
             >
               Refresh room data
             </button>
+          </Flex>
+        </Card>
+      </Flex>
+
+      <Flex>
+        <Card
+          size={"small"}
+          title={"Timer"}
+          style={{ width: "100%", backgroundColor: "#a1a1a1" }}
+        >
+          <Flex justify={"space-between"} align={"center"} gap={"middle"}>
+            <Flex vertical style={{ flexShrink: 0 }}>
+              <div>Duration (seconds)</div>
+              <input
+                type="number"
+                min={1}
+                value={timerValue}
+                onChange={(e) =>
+                  setTimerValue(Math.max(1, parseInt(e.target.value, 10) || 1))
+                }
+                style={{ width: "100px" }}
+              />
+            </Flex>
+            <Flex gap={"small"} wrap={"wrap"}>
+              <button
+                style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
+                onClick={startStopCountdown}
+              >
+                {running ? (
+                  <>
+                    Pause <PauseCircleOutlined />
+                  </>
+                ) : (
+                  <>
+                    Start <PlayCircleOutlined />
+                  </>
+                )}
+              </button>
+              <button
+                style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
+                onClick={resetCountdown}
+              >
+                Reset
+              </button>
+            </Flex>
+            <div
+              style={{
+                fontSize: "1.8em",
+                fontWeight: 800,
+                minWidth: "4ch",
+                textAlign: "center",
+              }}
+            >
+              <CountdownTimer />
+            </div>
           </Flex>
         </Card>
       </Flex>

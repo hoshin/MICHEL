@@ -1,0 +1,11 @@
+.countdown-timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-family: inherit;
+  color: #000;
+  background-color: transparent;
+  margin: 0;
+  padding: 0;
+}
