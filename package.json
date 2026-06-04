@@ -18,7 +18,8 @@
     "start": "npm run build:back && npm run build:front && concurrently \"npm run start:back:build\" \"npm run start:front\"",
     "start:back": "cd ./back && npm run start",
     "start:back:build": "node ./dist/back/index.js",
-    "start:front": "cd ./front/client-app && npm run dev"
+    "start:front": "cd ./front/client-app && npm run dev",
+    "prepare": "husky"
   },
   "build": {
     "appId": "com.hoshin-casts-michelectron",
@@ -51,6 +52,7 @@
     "concurrently": "^10.0.3",
     "electron": "^36.9.5",
     "electron-builder": "^26.0.12",
+    "husky": "^9.1.7",
     "jest": "^30.1.3",
     "rimraf": "^6.1.2",
     "ts-jest": "^29.4.5",
