@@ -35,24 +35,9 @@ describe('MichelBackService', () => {
             // action
             await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
             // assert
-            expect(fetchMock).toHaveBeenCalledWith('https://www.faceit.com/api/democracy/v1/match/match-id', {
+            expect(fetchMock).toHaveBeenCalledWith('https://www.faceit.com/api/democracy/v1/match/match-id/history', {
                 "headers": {
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Encoding": "gzip, deflate, br, zstd",
-                    "Accept-Language": "en-US,en;q=0.5",
-                    "Alt-Used": "www.faceit.com",
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "DNT": "1",
-                    "Pragma": "no-cache",
-                    "Priority": "u=4",
-                    "Referer": "https://www.faceit.com/en/ow2/room/match-id",
-                    "Sec-Fetch-Dest": "empty",
-                    "Sec-Fetch-Mode": "cors",
-                    "Sec-Fetch-Site": "same-origin",
-                    "Sec-GPC": "1",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0",
-                    "faceit-referer": "web-next"
+                    "Accept": "application/json",
                 }, "method": "GET"
             })
             expect(errorSpy).toHaveBeenCalledWith('Could not update lobby data using FaceIt match id match-id', new Error('Response status not 200 : 418'))
@@ -263,6 +248,63 @@ describe('MichelBackService', () => {
             expect(michelBackService.getSeriesData().team2.logo).toStrictEqual('')
         })
     })
+    describe('swapTeams', () => {
+        it('should swap right and left display values', () => {
+            // setup
+            const michelBackService = new MichelBackService([], false)
+            // Default: right = 'team1', left = 'team2'
+
+            // action
+            michelBackService.swapTeams(null)
+
+            // assert
+            expect(michelBackService.getSeriesData().display.right).toStrictEqual('team2')
+            expect(michelBackService.getSeriesData().display.left).toStrictEqual('team1')
+        })
+
+        it('should restore original values when called twice', () => {
+            // setup
+            const michelBackService = new MichelBackService([], false)
+
+            // action
+            michelBackService.swapTeams(null)
+            michelBackService.swapTeams(null)
+
+            // assert
+            expect(michelBackService.getSeriesData().display.right).toStrictEqual('team1')
+            expect(michelBackService.getSeriesData().display.left).toStrictEqual('team2')
+        })
+
+        it('should call sendUpdatedStateToCaller with the provided response', () => {
+            // setup
+            const michelBackService = new MichelBackService([], false)
+            const sendUpdatedStateStub = jest.spyOn(michelBackService, 'sendUpdatedStateToCaller').mockImplementation(() => {})
+            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+
+            // action
+            michelBackService.swapTeams(res)
+
+            // assert
+            expect(sendUpdatedStateStub).toHaveBeenCalledWith(res)
+        })
+
+        it('should broadcast the updated state to all WebSocket clients after swapping', () => {
+            // setup
+            const sendStub = jest.fn()
+            const connectionPool = [{ send: sendStub }, { send: sendStub }]
+            const michelBackService = new MichelBackService(connectionPool, false)
+
+            // action
+            michelBackService.swapTeams(null)
+
+            // assert
+            expect(sendStub).toHaveBeenCalledTimes(2)
+            const sentPayload = JSON.parse(sendStub.mock.calls[0][0])
+            expect(sentPayload.display.right).toStrictEqual('team2')
+            expect(sentPayload.display.left).toStrictEqual('team1')
+        })
+    })
+
     describe('updateMapCountAndRefreshFaceItDataIfNeeded', () => {
         it('should increment the mapCount by the provided counter', () => {
             // setup
