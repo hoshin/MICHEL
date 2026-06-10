@@ -1,0 +1,4 @@
+if git diff --cached --name-only | grep -q '^back/'; then
+  echo "back/ changes detected — running unit tests..."
+  (cd back && npm test)
+fi
