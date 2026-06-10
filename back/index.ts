@@ -1,10 +1,11 @@
-import express from 'express'
+import express, { Request, Response } from 'express'
 import { WebSocketServer } from 'ws'
 const app = express()
 const port = 3000
 
 import {
-    MichelBackService
+    MichelBackService,
+    SeriesData
 } from './handlers/home.js'
 
 let serverSocket = null
@@ -13,16 +14,26 @@ let michelBackService: MichelBackService = new MichelBackService(connectionPool,
 
 app.use(express.json())
 
-app.get('/', (_, res) => michelBackService.home(res))
-app.post('/team1-increase-score', (_, res) => michelBackService.teamIncrementScore(res, 'team1', 1))
-app.post('/team1-decrease-score', (_, res) => michelBackService.teamIncrementScore(res, 'team1', -1))
-app.post('/team2-increase-score', (_, res) => michelBackService.teamIncrementScore(res, 'team2', 1))
-app.post('/team2-decrease-score', (_, res) => michelBackService.teamIncrementScore(res, 'team2', -1))
-app.post('/custom-counter-increase', (_, res) => michelBackService.increaseCustomCounter(res))
-app.post('/custom-counter-decrease', (_, res) => michelBackService.decreaseCustomCounter(res))
-app.post('/increase-map-count', (_, res) => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, 1))
-app.post('/decrease-map-count', (_, res) => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, -1))
-app.post('/swap-teams', (_, res) => michelBackService.swapTeams(res))
+/**
+ * Wraps a synchronous service call: executes it, sends the resulting
+ * SeriesData as a JSON response, and broadcasts the updated state to all
+ * connected WebSocket clients.
+ */
+const updateSeriesStateAndReturnItAsJSON = (fn: () => SeriesData) => (_: Request, res: Response) => {
+    res.json(fn())
+    michelBackService.broadcastState()
+}
+
+app.get('/', updateSeriesStateAndReturnItAsJSON(() => michelBackService.home()))
+app.post('/team1-increase-score', updateSeriesStateAndReturnItAsJSON(() => michelBackService.teamIncrementScore('team1', 1)))
+app.post('/team1-decrease-score', updateSeriesStateAndReturnItAsJSON(() => michelBackService.teamIncrementScore('team1', -1)))
+app.post('/team2-increase-score', updateSeriesStateAndReturnItAsJSON(() => michelBackService.teamIncrementScore('team2', 1)))
+app.post('/team2-decrease-score', updateSeriesStateAndReturnItAsJSON(() => michelBackService.teamIncrementScore('team2', -1)))
+app.post('/custom-counter-increase', updateSeriesStateAndReturnItAsJSON(() => michelBackService.increaseCustomCounter()))
+app.post('/custom-counter-decrease', updateSeriesStateAndReturnItAsJSON(() => michelBackService.decreaseCustomCounter()))
+app.post('/increase-map-count', updateSeriesStateAndReturnItAsJSON(() => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)))
+app.post('/decrease-map-count', updateSeriesStateAndReturnItAsJSON(() => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(-1)))
+app.post('/swap-teams', updateSeriesStateAndReturnItAsJSON(() => michelBackService.swapTeams()))
 
 const server = app.listen(port, () => {
     console.log(`M.I.C.H.E.L. backend service listening on port : ${port}`)
