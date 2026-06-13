@@ -17,7 +17,18 @@ type GeneralMatchInformation = {
     customCounter: number,
     mapFormat: MapFormat,
     tournamentLogo: string,
-    optionalLogoDisplay: boolean
+    optionalLogoDisplay: boolean,
+    // Countdown timer driven by the back-end. `value` is the remaining
+    // seconds, `running` is true while the per-second tick is active. The
+    // back-end owns the tick (rather than the renderer that started it) so
+    // that overlays see a consistent value, the timer survives a Config
+    // Center page reload, and OBS browser sources never have to share
+    // state with another browsing context.
+    countdown: number,
+    countdownRunning: boolean,
+    // CSS color string used by the <CountdownTimer /> component. Empty
+    // string means "fall back to the component's CSS default".
+    countdownColor: string
 }
 type BanData = {
     heroImage?: string,
@@ -60,7 +71,10 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
         customCounter: 0,
         mapFormat: 'FT3',
         tournamentLogo: '',
-        optionalLogoDisplay: true
+        optionalLogoDisplay: true,
+        countdown: 0,
+        countdownRunning: false,
+        countdownColor: ''
     },
     faceIt: {
         matchId: '',
@@ -77,6 +91,10 @@ export class MichelBackService {
     private debug: boolean
     private seriesData: SeriesData
     private logger: Logger
+    // Server-owned 1 s tick for the countdown. We hold a reference here so
+    // that pause / reset / a new start can replace any running interval
+    // without leaking timers. Reset to null whenever the countdown stops.
+    private countdownTimer: ReturnType<typeof setInterval> | null = null
 
     constructor(connectionPool, debug: boolean, seriesData?: SeriesData, logger?: Logger) {
         this.connectionPool = connectionPool
@@ -197,6 +215,26 @@ export class MichelBackService {
             case 'catchup':
                 this.catchup(null, payload.value);
                 break;
+            case 'countdownSet':
+                // Update the displayed value without running the timer
+                // (e.g. user dragged the slider while the timer was idle).
+                this.countdownSet(null, payload.value);
+                break;
+            case 'countdownStart':
+                this.countdownStart(null, payload.value);
+                break;
+            case 'countdownPause':
+                this.countdownPause(null);
+                break;
+            case 'countdownResume':
+                this.countdownResume(null);
+                break;
+            case 'countdownReset':
+                this.countdownReset(null, payload.value);
+                break;
+            case 'countdownSetColor':
+                this.countdownSetColor(null, payload.value);
+                break;
             default:
                 this.home(null)
         }
@@ -261,6 +299,120 @@ export class MichelBackService {
         }
 
         this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Stop the running countdown interval, if any, and clear the handle.
+     * Idempotent: safe to call when no timer is running.
+     */
+    private clearCountdownTimer = () => {
+        if (this.countdownTimer !== null) {
+            clearInterval(this.countdownTimer)
+            this.countdownTimer = null
+        }
+    }
+
+    /**
+     * Set the displayed countdown value without starting the timer. Used
+     * when the user drags the input/slider while the timer is idle.
+     */
+    countdownSet = (res: Response, value: number) => {
+        this.clearCountdownTimer()
+        this.seriesData.display.countdown = Math.max(0, Math.floor(Number(value) || 0))
+        this.seriesData.display.countdownRunning = false
+        if (this.debug) {
+            this.logger.info(`countdownSet to ${this.seriesData.display.countdown}`)
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Start (or restart) the countdown from the given number of seconds.
+     * Replaces any previously-running interval so re-pressing Start while
+     * the timer is already running simply resets it to the new value.
+     */
+    countdownStart = (res: Response, value: number) => {
+        this.clearCountdownTimer()
+        this.seriesData.display.countdown = Math.max(0, Math.floor(Number(value) || 0))
+        this.seriesData.display.countdownRunning = this.seriesData.display.countdown > 0
+        if (this.debug) {
+            this.logger.info(`countdownStart from ${this.seriesData.display.countdown}`)
+        }
+        if (this.seriesData.display.countdownRunning) {
+            this.countdownTimer = setInterval(this.tickCountdown, 1000)
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Pause the running countdown, keeping the current value visible.
+     */
+    countdownPause = (res: Response) => {
+        this.clearCountdownTimer()
+        this.seriesData.display.countdownRunning = false
+        if (this.debug) {
+            this.logger.info(`countdownPause at ${this.seriesData.display.countdown}`)
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Resume a paused countdown. No-op if the current value is 0 (we
+     * would simply tick to 0 immediately).
+     */
+    countdownResume = (res: Response) => {
+        this.clearCountdownTimer()
+        if (this.seriesData.display.countdown > 0) {
+            this.seriesData.display.countdownRunning = true
+            this.countdownTimer = setInterval(this.tickCountdown, 1000)
+            if (this.debug) {
+                this.logger.info(`countdownResume from ${this.seriesData.display.countdown}`)
+            }
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Update the CSS color used by the <CountdownTimer /> component. Empty
+     * string clears the override and lets the component fall back to its
+     * default CSS color.
+     */
+    countdownSetColor = (res: Response, value: string) => {
+        const color = typeof value === 'string' ? value : ''
+        this.seriesData.display.countdownColor = color
+        if (this.debug) {
+            this.logger.info(`countdownSetColor to "${color}"`)
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Reset the countdown to a given value (or to 0 if none is provided)
+     * and stop the timer.
+     */
+    countdownReset = (res: Response, value?: number) => {
+        this.clearCountdownTimer()
+        this.seriesData.display.countdown = Math.max(0, Math.floor(Number(value) || 0))
+        this.seriesData.display.countdownRunning = false
+        if (this.debug) {
+            this.logger.info(`countdownReset to ${this.seriesData.display.countdown}`)
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Internal: 1 s tick. Decrements the value and broadcasts to all
+     * subscribers; clears itself when the countdown hits 0.
+     */
+    private tickCountdown = () => {
+        if (this.seriesData.display.countdown <= 1) {
+            this.seriesData.display.countdown = 0
+            this.seriesData.display.countdownRunning = false
+            this.clearCountdownTimer()
+        } else {
+            this.seriesData.display.countdown -= 1
+        }
+        this.sendUpdatedStateToCaller(null)
     }
 
     updateTournamentLogo = (res: Response, newLogo: string) => {

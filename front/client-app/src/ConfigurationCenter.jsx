@@ -1,7 +1,7 @@
 import "./components/TeamForm.jsx";
 import { TeamForm } from "./components/TeamForm.jsx";
 import MapSetup from "./components/MapSetup.jsx";
-import CountdownTimer, { notifyCountdown } from "./components/CountdownTimer.jsx";
+import CountdownTimer from "./components/CountdownTimer.jsx";
 
 import "./ConfigurationCenter.css";
 import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
@@ -219,7 +219,6 @@ function ConfigurationCenter() {
   const { teamsData, status, send, consumeCatchupIntent } = useTeamsData();
   const [resyncNotice, setResyncNotice] = useState(null);
   const [timerValue, setTimerValue] = useState(60);
-  const [running, setRunning] = useState(false);
   const countdownRef = useRef(null);
   const currentRef = useRef(null);
   // Track the previous status so we can detect the transition into `open`
@@ -274,29 +273,38 @@ function ConfigurationCenter() {
         }, 1000);
     };
 
+    // Countdown lives on the back-end now, so we just read its current
+    // running state and forward user actions as commands. This keeps every
+    // open overlay (including OBS browser sources) perfectly in sync, and
+    // lets the timer survive a Config Center reload.
+    const running = !!teamsData?.display?.countdownRunning;
+    const currentValue = teamsData?.display?.countdown ?? 0;
+
     const startStopCountdown = () => {
-        if (countdownRef.current) {
-            // Currently running — pause it
-            clearInterval(countdownRef.current);
-            countdownRef.current = null;
-            setRunning(false);
-        } else if (currentRef.current !== null && currentRef.current > 0) {
-            // Currently paused — resume from where we left off
-            runInterval(currentRef.current);
+        if (running) {
+            send({ command: "countdownPause" });
+        } else if (currentValue > 0) {
+            // Currently paused — resume from where we left off.
+            send({ command: "countdownResume" });
         } else {
-            // Idle — start fresh
-            runInterval(timerValue);
+            // Idle — start fresh from the configured value.
+            send({ command: "countdownStart", value: timerValue });
         }
     };
 
     const resetCountdown = () => {
-        if (countdownRef.current) {
-            clearInterval(countdownRef.current);
-            countdownRef.current = null;
-        }
-        currentRef.current = null;
-        setRunning(false);
-        notifyCountdown(timerValue);
+        send({ command: "countdownReset", value: timerValue });
+    };
+    // Native <input type="color"> always returns a `#rrggbb` string and
+    // cannot represent "no color" — so we keep the picker showing the
+    // currently broadcast color (or black as a neutral default) and provide
+    // a separate Reset button to clear the override.
+    const countdownColor = teamsData?.display?.countdownColor ?? "";
+    const updateCountdownColor = (event) => {
+        send({ command: "countdownSetColor", value: event.target.value });
+    };
+    const resetCountdownColor = () => {
+        send({ command: "countdownSetColor", value: "" });
     };
   const sendCommandHandler = (command) => (event) => {
     event.preventDefault();
@@ -482,51 +490,92 @@ function ConfigurationCenter() {
           title={"Timer"}
           style={{ width: "100%", backgroundColor: "#a1a1a1" }}
         >
-          <Flex justify={"space-between"} align={"center"} gap={"middle"}>
-            <Flex vertical style={{ flexShrink: 0 }}>
-              <div>Duration (seconds)</div>
+          <Flex vertical gap={"small"}>
+            <Flex justify={"space-between"} align={"center"} gap={"middle"}>
+              <Flex vertical style={{ flexShrink: 0 }}>
+                <div>Duration (seconds)</div>
+                <input
+                  type="number"
+                  min={1}
+                  value={timerValue}
+                  onChange={(e) =>
+                    setTimerValue(Math.max(1, parseInt(e.target.value, 10) || 1))
+                  }
+                  style={{ width: "100px" }}
+                />
+              </Flex>
+              <Flex gap={"small"} wrap={"wrap"}>
+                <button
+                  style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
+                  onClick={startStopCountdown}
+                >
+                  {running ? (
+                    <>
+                      Pause <PauseCircleOutlined />
+                    </>
+                  ) : (
+                    <>
+                      Start <PlayCircleOutlined />
+                    </>
+                  )}
+                </button>
+                <button
+                  style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
+                  onClick={resetCountdown}
+                >
+                  Reset
+                </button>
+              </Flex>
+              <div
+                style={{
+                  fontSize: "1.8em",
+                  fontWeight: 800,
+                  minWidth: "4ch",
+                  textAlign: "center",
+                }}
+              >
+                <CountdownTimer fontSize={"1em"} />
+              </div>
+            </Flex>
+            <Flex align={"center"} gap={"small"}>
+              <label htmlFor="countdown-color-picker">Color</label>
               <input
-                type="number"
-                min={1}
-                value={timerValue}
-                onChange={(e) =>
-                  setTimerValue(Math.max(1, parseInt(e.target.value, 10) || 1))
+                id="countdown-color-picker"
+                type="color"
+                value={countdownColor || "#000000"}
+                onChange={updateCountdownColor}
+                title={
+                  countdownColor
+                    ? `Currently using ${countdownColor}`
+                    : "Using the default color"
                 }
-                style={{ width: "100px" }}
+                style={{
+                  width: "40px",
+                  height: "28px",
+                  padding: 0,
+                  border: "1px solid #555",
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
               />
-            </Flex>
-            <Flex gap={"small"} wrap={"wrap"}>
               <button
-                style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
-                onClick={startStopCountdown}
+                style={{ fontWeight: 600, padding: "0.3em 0.8em" }}
+                onClick={resetCountdownColor}
+                disabled={!countdownColor}
+                title={"Clear the color override and use the default"}
               >
-                {running ? (
-                  <>
-                    Pause <PauseCircleOutlined />
-                  </>
-                ) : (
-                  <>
-                    Start <PlayCircleOutlined />
-                  </>
-                )}
+                Reset color
               </button>
-              <button
-                style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
-                onClick={resetCountdown}
-              >
-                Reset
-              </button>
+              {countdownColor ? (
+                <span style={{ fontSize: "0.85em", color: "#333" }}>
+                  Active: <code>{countdownColor}</code>
+                </span>
+              ) : (
+                <span style={{ fontSize: "0.85em", color: "#333", fontStyle: "italic" }}>
+                  Using default
+                </span>
+              )}
             </Flex>
-            <div
-              style={{
-                fontSize: "1.8em",
-                fontWeight: 800,
-                minWidth: "4ch",
-                textAlign: "center",
-              }}
-            >
-              <CountdownTimer />
-            </div>
           </Flex>
         </Card>
       </Flex>
