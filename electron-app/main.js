@@ -26,13 +26,11 @@ let win
 let serverProcess
 let frontServerProcess
 
-function quitApp(win) {
-    return async () => {
-        frontServerProcess?.kill()
-        serverProcess?.kill()
-        app.quit()
-        win = null
-    };
+function quitApp() {
+    frontServerProcess?.kill()
+    serverProcess?.kill()
+    win = null
+    app.quit()
 }
 
 function createWindow() {
@@ -53,7 +51,7 @@ function createWindow() {
                 submenu: [
                     {
                         label: 'Quit',
-                        click: quitApp(win)
+                        click: quitApp
                     }
                 ],
         },
@@ -114,6 +112,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-       quitApp(win)
+       quitApp()
     }
 })
