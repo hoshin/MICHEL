@@ -126,8 +126,10 @@
     <p class="help">
       The key is stored in your local <code>config.json</code> and forwarded to
       the back-end as the <code>FACEIT_KEY</code> environment variable. Saving
-      restarts the back-end so the new key takes effect immediately &mdash; no
-      need to restart the whole app.
+      restarts the back-end and refreshes the main window so the new key takes
+      effect immediately &mdash; no need to restart the whole app. Any
+      in-progress series data in the main window will be reset by the
+      restart.
     </p>
 
     <label for="apiKey">Key</label>
@@ -185,6 +187,9 @@
         saveBtn.disabled = true;
         cancelBtn.disabled = true;
         setStatus("Saving and restarting back-end...", "info");
+        // The main window will be reloaded once the new back-end is up;
+        // we keep the Settings window open so the user can confirm the
+        // operation succeeded.
         try {
           const result = await window.michelSettings.saveFaceItKey(
             apiKeyInput.value,
@@ -192,7 +197,7 @@
           if (result && result.ok) {
             originalKey = apiKeyInput.value;
             setStatus(
-              "Saved. The back-end has been reloaded with the new key.",
+              "Saved. The back-end has been reloaded with the new key and the main window has refreshed its connection.",
               "success",
             );
             updateSaveButton();

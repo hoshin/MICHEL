@@ -98,9 +98,17 @@ When you save, the app:
 
 - Writes the new key to `config.json` in the user data folder (see paths
   above) so it persists across restarts.
-- Restarts only the back-end process with the new key, so FACEIT-backed
-  actions start working immediately — you do not need to restart the
-  whole app.
+- Restarts the back-end process with the new key.
+- Reloads the main window so it reconnects its WebSocket to the freshly
+  restarted back-end. The front-end serving layer itself is left running.
+
+You do not need to restart the whole app. The reload takes about a
+second, after which FACEIT-backed actions immediately use the new key.
+
+> **Note:** because the back-end is restarted, any series data the
+> back-end was holding in memory (current scores, map count, bans, etc.)
+> is reset to defaults. Save the FACEIT key before starting a match, not
+> during one.
 
 The Settings dialog is part of the desktop app itself, not the front-end.
 If you open one of the overlay pages in a regular browser (for example to

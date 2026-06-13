@@ -31,6 +31,12 @@ let win
 let settingsWin
 let serverProcess
 let frontServerProcess
+// Becomes true once the initial startup coordination has fired the
+// `forks-ready` IPC for the first time. From that point on, any subsequent
+// `did-finish-load` (i.e. a renderer reload) gets its own immediate
+// `forks-ready` so the preload's loading overlay clears without waiting
+// for its 5 s fallback.
+let initialLoadCompleted = false
 
 // Maximum time (ms) we wait for a forked child to exit after sending SIGTERM
 // before we resort to SIGKILL. The forked back-end / front server normally
@@ -239,6 +245,15 @@ function createWindow() {
 
     win.webContents.on('did-finish-load', () => {
         win?.webContents.send('main-process-message', (new Date).toLocaleString())
+        // Subsequent loads (e.g. after restartBackEnd reloads the renderer)
+        // need their own forks-ready signal so the preload's loading
+        // overlay dismisses immediately instead of waiting for the 5 s
+        // fallback. The very first did-finish-load is handled separately
+        // by the whenReady coordination below, which also gates on the
+        // forks having been spawned.
+        if (initialLoadCompleted) {
+            win?.webContents.send('forks-ready')
+        }
     })
 }
 
@@ -269,20 +284,35 @@ function forkFrontServer(config) {
 }
 
 /**
- * Kill the current back-end fork (if any) and re-fork it with the current
- * configuration. Returns a promise that resolves once the new fork has
- * spawned and the previous one has been told to terminate (force-killed if
- * needed).
+ * Kill the current back-end fork (if any), re-fork it with the current
+ * configuration, and reload the main renderer so that it drops its now-stale
+ * WebSocket connection and reopens a fresh one against the new back-end.
+ *
+ * Resolves once the new fork has spawned. The old fork is taken down
+ * FIRST so that it releases its TCP port before the new fork tries to
+ * bind — otherwise the new fork could crash with EADDRINUSE. The
+ * graceful-then-forceful kill bounds the worst-case wait to
+ * CHILD_SHUTDOWN_TIMEOUT_MS (1.5 s).
  */
 async function restartBackEnd() {
     const previous = serverProcess
+    serverProcess = null
+
+    if (previous) {
+        await gracefullyKillChild(previous, 'previous back-end')
+    }
+
     serverProcess = forkBackEnd(currentConfig)
     await waitForSpawn(serverProcess)
-    // Do not block the caller on the old fork's death: it will be cleaned
-    // up in the background using the same graceful-then-forceful strategy
-    // as full shutdown, so a stuck old process can never accumulate.
-    if (previous) {
-        gracefullyKillChild(previous, 'previous back-end')
+
+    // The renderer opens its WebSocket against the back-end at module-load
+    // time and has no built-in reconnect logic, so without a reload it
+    // would stay tied to the dead socket of the old fork. A reload is the
+    // simplest way to give it a fresh connection. The front server is left
+    // alone — it serves only static assets, so it does not need to be
+    // restarted to pick up the new configuration.
+    if (win && !win.isDestroyed()) {
+        win.webContents.reload()
     }
     console.log('[main] back-end fork restarted with updated configuration')
 }
@@ -337,6 +367,7 @@ app.whenReady().then(() => {
 
     Promise.all([forksReady, rendererReady]).then(() => {
         win?.webContents.send('forks-ready')
+        initialLoadCompleted = true
     })
 })
 
