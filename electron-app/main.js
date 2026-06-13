@@ -92,6 +92,16 @@ function createWindow() {
     })
 }
 
+function waitForSpawn(child) {
+    return new Promise((resolve) => {
+        if (child.pid) {
+            resolve()
+            return
+        }
+        child.once('spawn', resolve)
+    })
+}
+
 app.whenReady().then(() => {
     const config = loadConfig()
 
@@ -107,7 +117,20 @@ app.whenReady().then(() => {
         { env: { ...process.env, FRONT_SERVER_PORT: String(config.ports.frontServer) } }
     )
 
+    const forksReady = Promise.all([
+        waitForSpawn(serverProcess),
+        waitForSpawn(frontServerProcess),
+    ])
+
     createWindow()
+
+    const rendererReady = new Promise((resolve) => {
+        win.webContents.once('did-finish-load', resolve)
+    })
+
+    Promise.all([forksReady, rendererReady]).then(() => {
+        win?.webContents.send('forks-ready')
+    })
 })
 
 app.on('window-all-closed', () => {
