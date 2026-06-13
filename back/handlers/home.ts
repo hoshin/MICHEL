@@ -105,7 +105,9 @@ export class MichelBackService {
             const configFile = fs.readFileSync('./back/config.json')
             this.logger.info('Config file present ... updating seriesData!')
             const jsonSeriesConfigurationFromFile = JSON.parse(configFile.toString('utf8')).seriesData
-            apiKey = jsonSeriesConfigurationFromFile.faceIt.apiKey
+            if(!apiKey){
+                apiKey = jsonSeriesConfigurationFromFile.faceIt.apiKey
+            }
             // this.logger.info(`API key? ${apiKey}`)
             if (jsonSeriesConfigurationFromFile?.faceIt?.matchId?.length > 0) {
                 this.logger.info(`FaceIt matchID present in config file! Building series data with it! ${jsonSeriesConfigurationFromFile.faceIt.matchId}`)

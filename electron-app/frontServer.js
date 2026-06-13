@@ -1,7 +1,7 @@
 const express = require("express")
 const path = require("path")
 const app = express()
-const port = 5173
+const port = Number(process.env.FRONT_SERVER_PORT) || 5173
 
 
 console.log(path.join(__dirname + '/../dist/front/'))

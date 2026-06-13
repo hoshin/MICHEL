@@ -2,8 +2,13 @@ const { app, BrowserWindow, ipcMain, shell} = require('electron')
 const path = require('node:path')
 const { fork }  = require('child_process')
 const {Menu} = require("electron/main");
-const serverProcess = fork(__dirname + '/../dist/back/index')
-const frontServerProcess = fork(__dirname + '/frontServer.js')
+const { loadConfig } = require('./config')
+
+// Force a stable app name so app.getPath('userData') resolves to
+// %APPDATA%\michelectron (Windows) / ~/Library/Application Support/michelectron (macOS)
+// / ~/.config/michelectron (Linux) whether the app is launched via
+// `electron .` during development or as a packaged build.
+app.setName('michelectron')
 
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 
@@ -18,11 +23,13 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win
+let serverProcess
+let frontServerProcess
 
 function quitApp(win) {
     return async () => {
-        frontServerProcess.kill()
-        serverProcess.kill()
+        frontServerProcess?.kill()
+        serverProcess?.kill()
         app.quit()
         win = null
     };
@@ -87,7 +94,23 @@ function createWindow() {
     })
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+    const config = loadConfig()
+
+    serverProcess = fork(
+        path.join(__dirname, '../dist/back/index'),
+        [],
+        { env: { ...process.env, FACEIT_KEY: config.secrets.faceItAPIKey } }
+    )
+
+    frontServerProcess = fork(
+        path.join(__dirname, 'frontServer.js'),
+        [],
+        { env: { ...process.env, FRONT_SERVER_PORT: String(config.ports.frontServer) } }
+    )
+
+    createWindow()
+})
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
