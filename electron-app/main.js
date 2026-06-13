@@ -2,7 +2,12 @@ const { app, BrowserWindow, ipcMain, shell} = require('electron')
 const path = require('node:path')
 const { fork }  = require('child_process')
 const {Menu} = require("electron/main");
-const { loadConfig } = require('./config')
+const { loadConfig, saveConfig } = require('./config')
+
+// Live in-memory copy of the configuration. Replaced (not mutated) whenever
+// the user saves changes through the in-app settings, so that subsequent reads
+// see the most recent values without re-reading the file.
+let currentConfig
 
 // Force a stable app name so app.getPath('userData') resolves to
 // %APPDATA%\michelectron (Windows) / ~/Library/Application Support/michelectron (macOS)
@@ -23,14 +28,48 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win
+let settingsWin
 let serverProcess
 let frontServerProcess
 
 function quitApp() {
+    if (settingsWin && !settingsWin.isDestroyed()) {
+        settingsWin.destroy()
+    }
     frontServerProcess?.kill()
     serverProcess?.kill()
     win = null
+    settingsWin = null
     app.quit()
+}
+
+function openSettingsWindow() {
+    if (settingsWin && !settingsWin.isDestroyed()) {
+        settingsWin.focus()
+        return
+    }
+    settingsWin = new BrowserWindow({
+        width: 520,
+        height: 380,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        modal: Boolean(win),
+        parent: win,
+        title: 'M.I.C.H.E.L. - Settings',
+        autoHideMenuBar: true,
+        webPreferences: {
+            preload: path.join(__dirname, './settingsPreload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
+        },
+    })
+    settingsWin.setMenu(null)
+    settingsWin.loadFile(path.join(__dirname, 'settings.html'))
+    settingsWin.once('closed', () => {
+        settingsWin = null
+    })
 }
 
 function createWindow() {
@@ -50,9 +89,23 @@ function createWindow() {
             label: 'Actions',
                 submenu: [
                     {
+                        label: 'Settings...',
+                        accelerator: 'CmdOrCtrl+,',
+                        click: openSettingsWindow
+                    },
+                    { type: 'separator' },
+                    {
                         label: 'Quit',
                         click: quitApp
                     }
+                ],
+        },
+            {
+            label: 'View',
+                submenu: [
+                    { role: 'reload' },
+                    { role: 'forceReload' },
+                    { role: 'toggleDevTools' },
                 ],
         },
             {
@@ -102,20 +155,73 @@ function waitForSpawn(child) {
     })
 }
 
-app.whenReady().then(() => {
-    const config = loadConfig()
-
-    serverProcess = fork(
+function forkBackEnd(config) {
+    return fork(
         path.join(__dirname, '../dist/back/index'),
         [],
         { env: { ...process.env, FACEIT_KEY: config.secrets.faceItAPIKey } }
     )
+}
 
-    frontServerProcess = fork(
+function forkFrontServer(config) {
+    return fork(
         path.join(__dirname, 'frontServer.js'),
         [],
         { env: { ...process.env, FRONT_SERVER_PORT: String(config.ports.frontServer) } }
     )
+}
+
+/**
+ * Kill the current back-end fork (if any) and re-fork it with the current
+ * configuration. Returns a promise that resolves once the new fork has
+ * spawned.
+ */
+async function restartBackEnd() {
+    const previous = serverProcess
+    serverProcess = forkBackEnd(currentConfig)
+    await waitForSpawn(serverProcess)
+    if (previous) {
+        previous.kill()
+    }
+    console.log('[main] back-end fork restarted with updated configuration')
+}
+
+// --- IPC: Settings window <-> main process ------------------------------
+
+// Settings window asks for the current FACEIT key so it can pre-fill the
+// input field.
+ipcMain.handle('settings:get-faceit-key', () => {
+    return currentConfig?.secrets?.faceItAPIKey ?? ''
+})
+
+// Settings window pushes a new FACEIT API key. We persist it, refresh the
+// in-memory config, then restart the back-end fork so the new key takes
+// effect without the user having to restart the whole app.
+ipcMain.handle('settings:set-faceit-key', async (_event, rawKey) => {
+    try {
+        const key = typeof rawKey === 'string' ? rawKey.trim() : ''
+        currentConfig = saveConfig({ secrets: { faceItAPIKey: key } })
+        await restartBackEnd()
+        return { ok: true }
+    } catch (err) {
+        console.error('[main] Failed to save FACEIT API key.', err)
+        return { ok: false, error: err?.message || String(err) }
+    }
+})
+
+// Settings window asks to close itself (Cancel button).
+ipcMain.on('settings:close', (event) => {
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender)
+    if (sourceWindow && !sourceWindow.isDestroyed()) {
+        sourceWindow.close()
+    }
+})
+
+app.whenReady().then(() => {
+    currentConfig = loadConfig()
+
+    serverProcess = forkBackEnd(currentConfig)
+    frontServerProcess = forkFrontServer(currentConfig)
 
     const forksReady = Promise.all([
         waitForSpawn(serverProcess),

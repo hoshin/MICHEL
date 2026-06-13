@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>M.I.C.H.E.L. - Settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        background: #2b2b2b;
+        color: #f0f0f0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      h1 {
+        font-size: 1.2em;
+        margin: 0 0 12px 0;
+      }
+      p.help {
+        margin: 0 0 16px 0;
+        font-size: 0.9em;
+        color: #bbbbbb;
+        line-height: 1.4;
+      }
+      label {
+        display: block;
+        font-size: 0.9em;
+        margin-bottom: 6px;
+      }
+      .input-row {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        margin-bottom: 8px;
+      }
+      input[type="password"],
+      input[type="text"] {
+        flex: 1;
+        padding: 8px 10px;
+        font-size: 1em;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #1e1e1e;
+        color: #f0f0f0;
+        font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas,
+          monospace;
+      }
+      input:focus {
+        outline: 2px solid #646cff;
+        outline-offset: -1px;
+      }
+      .reveal-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85em;
+        color: #cccccc;
+        margin-bottom: 16px;
+        user-select: none;
+        cursor: pointer;
+      }
+      .button-row {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: auto;
+      }
+      button {
+        padding: 8px 18px;
+        font-size: 0.95em;
+        font-weight: 600;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #3a3a3a;
+        color: #f0f0f0;
+        cursor: pointer;
+      }
+      button.primary {
+        background: #4263eb;
+        border-color: #4263eb;
+      }
+      button:hover:not(:disabled) {
+        filter: brightness(1.15);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 0.9em;
+        min-height: 1.2em;
+      }
+      .status.success {
+        color: #4ec070;
+      }
+      .status.error {
+        color: #ff7676;
+      }
+      .status.info {
+        color: #cccccc;
+      }
+      code {
+        background: #1e1e1e;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FACEIT API key</h1>
+    <p class="help">
+      The key is stored in your local <code>config.json</code> and forwarded to
+      the back-end as the <code>FACEIT_KEY</code> environment variable. Saving
+      restarts the back-end so the new key takes effect immediately &mdash; no
+      need to restart the whole app.
+    </p>
+
+    <label for="apiKey">Key</label>
+    <div class="input-row">
+      <input
+        id="apiKey"
+        type="password"
+        placeholder="Loading current value..."
+        spellcheck="false"
+        autocomplete="off"
+      />
+    </div>
+    <label class="reveal-toggle">
+      <input id="reveal" type="checkbox" />
+      Show key
+    </label>
+
+    <div id="status" class="status info"></div>
+
+    <div class="button-row">
+      <button id="cancelBtn" type="button">Cancel</button>
+      <button id="saveBtn" class="primary" type="button" disabled>Save</button>
+    </div>
+
+    <script>
+      const apiKeyInput = document.getElementById("apiKey");
+      const revealCheckbox = document.getElementById("reveal");
+      const saveBtn = document.getElementById("saveBtn");
+      const cancelBtn = document.getElementById("cancelBtn");
+      const status = document.getElementById("status");
+
+      let originalKey = "";
+
+      function setStatus(message, kind) {
+        status.textContent = message;
+        status.className = "status " + (kind || "info");
+      }
+
+      function updateSaveButton() {
+        const dirty = apiKeyInput.value !== originalKey;
+        saveBtn.disabled = !dirty;
+      }
+
+      revealCheckbox.addEventListener("change", () => {
+        apiKeyInput.type = revealCheckbox.checked ? "text" : "password";
+      });
+
+      apiKeyInput.addEventListener("input", updateSaveButton);
+
+      cancelBtn.addEventListener("click", () => {
+        window.michelSettings.close();
+      });
+
+      saveBtn.addEventListener("click", async () => {
+        saveBtn.disabled = true;
+        cancelBtn.disabled = true;
+        setStatus("Saving and restarting back-end...", "info");
+        try {
+          const result = await window.michelSettings.saveFaceItKey(
+            apiKeyInput.value,
+          );
+          if (result && result.ok) {
+            originalKey = apiKeyInput.value;
+            setStatus(
+              "Saved. The back-end has been reloaded with the new key.",
+              "success",
+            );
+            updateSaveButton();
+          } else {
+            setStatus(
+              "Failed to save: " +
+                (result && result.error ? result.error : "unknown error"),
+              "error",
+            );
+          }
+        } catch (err) {
+          setStatus("Failed to save: " + (err && err.message ? err.message : err), "error");
+        } finally {
+          cancelBtn.disabled = false;
+        }
+      });
+
+      // Load the current value as soon as the bridge is available.
+      (async function init() {
+        try {
+          if (!window.michelSettings) {
+            setStatus(
+              "Settings bridge unavailable. Please reopen this window.",
+              "error",
+            );
+            return;
+          }
+          const current = await window.michelSettings.getCurrentFaceItKey();
+          originalKey = typeof current === "string" ? current : "";
+          apiKeyInput.value = originalKey;
+          apiKeyInput.placeholder = originalKey
+            ? "(stored \u2014 edit to replace)"
+            : "Paste your FACEIT API key";
+          setStatus("", "info");
+          updateSaveButton();
+          apiKeyInput.focus();
+        } catch (err) {
+          setStatus(
+            "Could not read current configuration: " +
+              (err && err.message ? err.message : err),
+            "error",
+          );
+        }
+      })();
+    </script>
+  </body>
+</html>

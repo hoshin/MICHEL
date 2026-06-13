@@ -62,6 +62,33 @@ logged at startup as `[config] Loading configuration from: ...`.**
   back to defaults so it still boots.
 - The loaded config object is frozen and treated as read-only by the app.
 
+## Setting the FACEIT API key from inside the app
+
+If you do not want to edit `config.json` by hand, the desktop app provides
+a small Settings dialog for the FACEIT API key:
+
+1. In the M.I.C.H.E.L. desktop app, open the **Actions** menu →
+   **Settings...** (or press **Ctrl + ,**).
+2. A small Settings window appears.
+3. Paste your key into the **Key** field. The field is masked by default;
+   tick **Show key** if you want to verify what you pasted.
+4. Click **Save**.
+
+When you save, the app:
+
+- Writes the new key to `config.json` in the user data folder (see paths
+  above) so it persists across restarts.
+- Restarts only the back-end process with the new key, so FACEIT-backed
+  actions start working immediately — you do not need to restart the
+  whole app.
+
+The Settings dialog is part of the desktop app itself, not the front-end.
+If you open one of the overlay pages in a regular browser (for example to
+use the overlays in OBS) there is no Settings dialog there — but you also
+do not need one, because the desktop app is what feeds the back-end with
+the key. Browser-only setups can still edit `config.json` directly using
+the steps in the troubleshooting section below.
+
 ## Troubleshooting
 
 ### The app does not seem to use my configuration / FACEIT actions fail even though my key is correct
