@@ -62,6 +62,26 @@ logged at startup as `[config] Loading configuration from: ...`.**
   back to defaults so it still boots.
 - The loaded config object is frozen and treated as read-only by the app.
 
+## Shutdown behavior
+
+When the app quits — whether the user closes the window, picks **Quit** in
+the menu, or another component calls `app.quit()` — the main process
+shuts down the forked back-end and front-server child processes using a
+graceful-then-forceful strategy:
+
+1. **SIGTERM** is sent to each child to let it clean up.
+2. If the child has not exited after **1.5 seconds**, the main process
+   sends **SIGKILL** (on Windows: `TerminateProcess`), which the OS cannot
+   refuse.
+3. Once all children are gone, Electron itself quits.
+
+This is to prevent the orphan-process accumulation that used to happen on
+Windows when `child.kill()` alone was unreliable. If you ever see a
+warning like
+`[main] back-end did not exit within 1500 ms; sending SIGKILL.` in the
+main process console, it means the back-end took too long to clean up and
+was force-killed — the app still exits cleanly.
+
 ## Setting the FACEIT API key from inside the app
 
 If you do not want to edit `config.json` by hand, the desktop app provides
@@ -203,6 +223,51 @@ If the second line says "Created default configuration file at ..."
 instead, it means your file was not found at that location — double-check
 the folder name, the file name, and that the extension is really `.json`
 (not `.json.txt`).
+
+### Build error: "Access is denied" on `d3dcompiler_47.dll` / `ffmpeg.dll` / other DLLs (Windows)
+
+When building the Electron app on Windows you may see something like:
+
+```
+⨯ remove ...\dist\electron-release-build\win-unpacked\d3dcompiler_47.dll: Access is denied.
+```
+
+#### Cause
+
+`electron-builder` tries to wipe the `win-unpacked/` folder before writing
+the new build into it. If a previously built `MICHELectron.exe` (or one of
+its forked back-end / front-server child processes) is still running,
+Windows refuses to delete the DLLs they have open, and the build aborts.
+
+#### Built-in safety net
+
+This repository ships a small pre-build script that runs automatically
+before `build:electron-app`:
+
+```
+node ./electron-app/scripts/kill-running-app.cjs
+```
+
+npm picks it up via the standard `prebuild:electron-app` hook, so it also
+runs as part of `build:all`. On Windows the script invokes
+`taskkill /F /IM MICHELectron.exe /T` and treats both "killed something"
+and "nothing to kill" as success, so the build always proceeds. On macOS
+and Linux it is a no-op (file locking on those platforms does not cause
+this class of failure).
+
+#### What to do if it still happens
+
+If you somehow hit the error anyway (for example: you ran
+`npx electron-builder` directly, bypassing the npm script):
+
+1. Open Task Manager and end any **`MICHELectron.exe`** processes.
+   Alternatively, from a terminal: `taskkill /F /IM MICHELectron.exe /T`.
+2. Re-run the build.
+
+The runtime shutdown logic (see [Shutdown behavior](#shutdown-behavior)
+above) is also designed to prevent orphan processes from accumulating in
+the first place, so this should only ever be an issue across very old
+installs that were built before that hardening landed.
 
 ### Build error: "Cannot create symbolic link : A required privilege is not held by the client" (Windows)
 

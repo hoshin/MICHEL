@@ -32,16 +32,113 @@ let settingsWin
 let serverProcess
 let frontServerProcess
 
+// Maximum time (ms) we wait for a forked child to exit after sending SIGTERM
+// before we resort to SIGKILL. The forked back-end / front server normally
+// exit in well under 100 ms, so 1500 ms is comfortable headroom while still
+// being short enough that a stuck child does not delay app shutdown
+// noticeably.
+const CHILD_SHUTDOWN_TIMEOUT_MS = 1500
+
+let shuttingDown = false
+
+/**
+ * Gracefully terminate a forked child process.
+ *
+ * Sends SIGTERM, waits up to {@link CHILD_SHUTDOWN_TIMEOUT_MS} for the
+ * `exit` event, and falls back to SIGKILL if the child is still alive at
+ * that point. On Windows, `child_process.kill('SIGKILL')` ultimately calls
+ * `TerminateProcess`, which the OS cannot refuse.
+ *
+ * Always resolves (never rejects) so that callers can `Promise.all` over
+ * several children without one stuck process aborting the whole shutdown.
+ *
+ * @param {import('child_process').ChildProcess | undefined | null} child
+ * @param {string} [label] - used in logs only
+ * @returns {Promise<void>}
+ */
+function gracefullyKillChild(child, label = 'child') {
+    return new Promise((resolve) => {
+        if (!child || child.exitCode !== null || child.signalCode !== null) {
+            resolve()
+            return
+        }
+
+        let settled = false
+        const finish = () => {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            resolve()
+        }
+
+        child.once('exit', () => {
+            console.log(`[main] ${label} exited cleanly.`)
+            finish()
+        })
+
+        try {
+            child.kill('SIGTERM')
+        } catch (err) {
+            console.error(`[main] Failed to send SIGTERM to ${label}.`, err)
+            finish()
+            return
+        }
+
+        const timer = setTimeout(() => {
+            if (settled) return
+            console.warn(
+                `[main] ${label} did not exit within ${CHILD_SHUTDOWN_TIMEOUT_MS} ms; sending SIGKILL.`
+            )
+            try {
+                child.kill('SIGKILL')
+            } catch (err) {
+                console.error(`[main] Failed to send SIGKILL to ${label}.`, err)
+            }
+            // We intentionally resolve even if SIGKILL throws or the process
+            // somehow survives. By this point the parent process is on its
+            // way out and the OS will reap orphans.
+            finish()
+        }, CHILD_SHUTDOWN_TIMEOUT_MS)
+    })
+}
+
+/**
+ * Kick off application shutdown: close the Settings window, kill children
+ * with the graceful-then-forceful strategy above, then quit Electron. Safe
+ * to call multiple times; only the first invocation does anything.
+ */
 function quitApp() {
+    if (shuttingDown) return
+    shuttingDown = true
+
     if (settingsWin && !settingsWin.isDestroyed()) {
         settingsWin.destroy()
     }
-    frontServerProcess?.kill()
-    serverProcess?.kill()
-    win = null
     settingsWin = null
-    app.quit()
+
+    const childrenGone = Promise.all([
+        gracefullyKillChild(frontServerProcess, 'front-server'),
+        gracefullyKillChild(serverProcess, 'back-end'),
+    ])
+
+    childrenGone.then(() => {
+        frontServerProcess = null
+        serverProcess = null
+        win = null
+        app.quit()
+    })
 }
+
+// If something else triggers `before-quit` (e.g. the user closes the last
+// window on macOS via Cmd+Q, or a future feature calls `app.quit()`
+// directly), we still want to clean up child processes first. We prevent
+// the immediate quit, hand control to `quitApp`, and let `app.quit()` fire
+// again from inside it once children are gone.
+app.on('before-quit', (event) => {
+    if (shuttingDown) return
+    event.preventDefault()
+    quitApp()
+})
 
 function openSettingsWindow() {
     if (settingsWin && !settingsWin.isDestroyed()) {
@@ -174,14 +271,18 @@ function forkFrontServer(config) {
 /**
  * Kill the current back-end fork (if any) and re-fork it with the current
  * configuration. Returns a promise that resolves once the new fork has
- * spawned.
+ * spawned and the previous one has been told to terminate (force-killed if
+ * needed).
  */
 async function restartBackEnd() {
     const previous = serverProcess
     serverProcess = forkBackEnd(currentConfig)
     await waitForSpawn(serverProcess)
+    // Do not block the caller on the old fork's death: it will be cleaned
+    // up in the background using the same graceful-then-forceful strategy
+    // as full shutdown, so a stuck old process can never accumulate.
     if (previous) {
-        previous.kill()
+        gracefullyKillChild(previous, 'previous back-end')
     }
     console.log('[main] back-end fork restarted with updated configuration')
 }
