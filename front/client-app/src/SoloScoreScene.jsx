@@ -1,22 +1,10 @@
-import { useState } from "react";
 import "./SoloScoreScene.css";
 
-import { DEFAULT_LOGO, DEFAULT_STATE, WEBSOCKET_URL } from "./config.js";
-
-const socket = new WebSocket(WEBSOCKET_URL);
-
-socket.addEventListener("open", (event) => {
-  socket.send(JSON.stringify({ init: 1 }));
-});
-
-let setTeamsDataWS = () => {};
-socket.addEventListener("message", (event) => {
-  setTeamsDataWS(JSON.parse(event.data));
-});
+import { DEFAULT_LOGO } from "./config.js";
+import { useTeamsData } from "./teamsDataSocket.ts";
 
 function SoloScoreScene() {
-  const [teamsData, setTeamsData] = useState(DEFAULT_STATE);
-  setTeamsDataWS = setTeamsData;
+  const { teamsData } = useTeamsData();
   const { score: team1Score } = teamsData.team1;
   const { score: team2Score } = teamsData.team2;
   const { customCounter, tournamentLogo, optionalLogoDisplay } =

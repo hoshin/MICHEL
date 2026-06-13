@@ -1,28 +1,12 @@
-import { useState } from "react";
 import "./components/TeamForm.jsx";
 import { TeamForm } from "./components/TeamForm.jsx";
 import MapSetup from "./components/MapSetup.jsx";
 
 import "./ConfigurationCenter.css";
-import {
-  DEFAULT_LOGO,
-  DEFAULT_STATE,
-  FACEIT_LOGO,
-  WEBSOCKET_URL,
-} from "./config.js";
+import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
 import { portraits } from "./TeamBanInput.jsx";
 import { Card, Flex, Table } from "antd";
-
-const socket = new WebSocket(WEBSOCKET_URL);
-
-socket.addEventListener("open", (event) => {
-  socket.send(JSON.stringify({ init: 1 }));
-});
-
-let setTeamsDataWS = () => {};
-socket.addEventListener("message", (event) => {
-  setTeamsDataWS(JSON.parse(event.data));
-});
+import { useTeamsData } from "./teamsDataSocket.ts";
 
 function copyURI(evt) {
   evt.preventDefault();
@@ -167,17 +151,15 @@ const data = [
 ];
 
 function ConfigurationCenter() {
-  const [teamsData, setTeamsData] = useState(DEFAULT_STATE);
-
-  setTeamsDataWS = setTeamsData;
+  const { teamsData, send } = useTeamsData();
 
   const sendCommandHandler = (command) => (event) => {
     event.preventDefault();
-    socket.send(JSON.stringify({ command, value: event.target.value }));
+    send({ command, value: event.target.value });
   };
 
   const noEventSendCommandHandler = () => (payload) => {
-    socket.send(JSON.stringify(payload));
+    send(payload);
   };
 
   const {
