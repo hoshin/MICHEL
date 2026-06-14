@@ -44,16 +44,31 @@ function getConfigPath() {
     return path.join(app.getPath('userData'), 'config.json')
 }
 
-function readConfigFromDisk() {
+/**
+ * Read the on-disk config file and return its parsed contents, guaranteed
+ * to be a plain object. Returns `{}` when the file is missing, unreadable,
+ * not valid JSON, or has a non-plain-object root (array, primitive, null).
+ *
+ * Centralised here so that every JSON.parse site against the config file
+ * goes through the same guard — downstream code (deepMerge, saveConfig,
+ * deepFreeze) all assume a plain-object root.
+ *
+ * @param {string} [contextLabel] - tag used in error logs to identify the caller
+ * @returns {object} a plain object (never an array, primitive, or null)
+ */
+function readConfigFromDisk(contextLabel = 'config') {
     const configPath = getConfigPath()
     if (!fs.existsSync(configPath)) {
         return {}
     }
     try {
         const parsedConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-        if(isPlainObject(parsedConfig)) {
+        if (isPlainObject(parsedConfig)) {
             return parsedConfig
         }
+        console.warn(
+            `[config] ${contextLabel}: on-disk config root is not a plain object; using {}.`
+        )
         return {}
     } catch (err) {
         console.error(`[config] Failed to read or parse ${configPath}.`, err)
@@ -74,18 +89,13 @@ function writeConfigToDisk(config) {
 function loadConfig() {
     const configPath = getConfigPath()
     console.log(`[config] Loading configuration from: ${configPath}`)
-    let userConfig = {}
 
+    let userConfig
     if (fs.existsSync(configPath)) {
-        try {
-            const raw = fs.readFileSync(configPath, 'utf-8')
-            userConfig = JSON.parse(raw)
-            console.log(`[config] Loaded existing configuration file.`)
-        } catch (err) {
-            console.error(`[config] Failed to read or parse ${configPath}, falling back to defaults.`, err)
-            userConfig = {}
-        }
+        userConfig = readConfigFromDisk('loadConfig')
+        console.log(`[config] Loaded existing configuration file.`)
     } else {
+        userConfig = {}
         try {
             writeConfigToDisk(DEFAULTS)
             console.log(`[config] Created default configuration file at ${configPath}`)
