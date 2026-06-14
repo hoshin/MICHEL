@@ -15,6 +15,9 @@
     "build:streamdeck-plugin": "cd stream-deck-plugin/michel-deck && npm run build-and-package:win",
     "prebuild:electron-app": "node ./electron-app/scripts/kill-running-app.cjs",
     "build:electron-app": "npx electron-builder",
+    "build:electron-app:win": "npx electron-builder --win --x64",
+    "build:electron-app:linux": "npx electron-builder --linux --x64",
+    "build:electron-app:mac": "npx electron-builder --mac --x64 --arm64",
     "build:all": "npm run build:clean && npm run build:back && npm run build:front && npm run build:streamdeck-plugin && npm run build:electron-app",
     "start": "npm run build:back && npm run build:front && concurrently \"npm run start:back:build\" \"npm run start:front\"",
     "start:back": "cd ./back && npm run start",
@@ -34,7 +37,28 @@
       "electron-app/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "electron-app/images/logo_56.png"
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb",      "arch": ["x64"] },
+        { "target": "rpm",      "arch": ["x64"] }
+      ],
+      "category": "AudioVideo",
+      "icon": "electron-app/images/logo_56.png"
+    },
+    "mac": {
+      "target": [
+        { "target": "zip", "arch": ["x64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ],
+      "category": "public.app-category.video",
+      "icon": "electron-app/images/logo_56.png",
+      "identity": null
     }
   },
   "private": true,
