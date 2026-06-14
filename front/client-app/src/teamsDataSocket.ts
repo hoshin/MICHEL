@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_STATE, WEBSOCKET_URL } from "./config.js";
 
 /**
@@ -312,15 +312,31 @@ export function useTeamsData() {
     };
   }, []);
 
+  // Both helpers below delegate to the module-level singleton and capture
+  // no per-render state, so an empty dependency list is correct: their
+  // identity is stable for the entire lifetime of the component. This
+  // matters because consumers (notably ConfigurationCenter) use these
+  // functions in `useEffect` dependency arrays; without stable identity
+  // those effects would re-run on every parent render, with the cleanup
+  // wiping any in-flight timer or subscription set up by the previous run.
+  const send = useCallback(
+    (payload: unknown) => teamsDataSocket.send(payload),
+    [],
+  );
+  /**
+   * Pull (and clear) the snapshot captured at the moment of the last
+   * disconnect. Used by the configuration center to assemble its
+   * `catchup` payload on reconnect.
+   */
+  const consumeCatchupIntent = useCallback(
+    () => teamsDataSocket.consumeCatchupIntent(),
+    [],
+  );
+
   return {
     teamsData,
     status,
-    send: (payload: unknown) => teamsDataSocket.send(payload),
-    /**
-     * Pull (and clear) the snapshot captured at the moment of the last
-     * disconnect. Used by the configuration center to assemble its
-     * `catchup` payload on reconnect.
-     */
-    consumeCatchupIntent: () => teamsDataSocket.consumeCatchupIntent(),
+    send,
+    consumeCatchupIntent,
   };
 }

@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
 import { useTeamsData } from "../teamsDataSocket.ts";
 import {CheckCircleOutlined, DisconnectOutlined, LoginOutlined} from "@ant-design/icons";
 
 /**
- * Tiny diagnostic badge that pops a small label in a corner of the screen
- * when the WebSocket connection is not in `open` state for more than a
- * brief grace window. Default delay is 2 seconds so the badge is invisible
- * during normal startup but appears reliably if the back-end goes away.
+ * Tiny diagnostic badge that pins the current WebSocket connection status
+ * in a corner of the screen. The badge is always visible — its icon and
+ * colour reflect the live status (`connecting` / `open` / `closed`) so
+ * the operator can tell at a glance whether the front is talking to the
+ * back-end. Previously this had a grace-period gate that hid the badge
+ * during normal operation; that was dropped in favour of permanent
+ * visibility on the configuration center.
  *
  * Drop this into any overlay during debugging:
  *
@@ -15,27 +17,9 @@ import {CheckCircleOutlined, DisconnectOutlined, LoginOutlined} from "@ant-desig
  * // inside the component's JSX:
  * <ConnectionBadge />
  * ```
- *
- * When everything is healthy the badge renders nothing. When the socket
- * stays in `connecting` or `closed` past the grace window it shows the
- * current status in the bottom-right corner so you can tell at a glance
- * whether an OBS source is "blank because the socket is dead" vs. "blank
- * because the page itself has a problem".
  */
-function ConnectionBadge({ corner = "top-left", graceMs = 2000 }) {
+function ConnectionBadge({ corner = "top-left" }) {
   const { status } = useTeamsData();
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (status === "open") {
-      setShow(false);
-      return;
-    }
-    const timer = setTimeout(() => setShow(true), graceMs);
-    return () => clearTimeout(timer);
-  }, [status, graceMs]);
-
-  // if (!show) return null;
 
   const positionStyles = {
     "bottom-right": { right: 16, bottom: 12 },

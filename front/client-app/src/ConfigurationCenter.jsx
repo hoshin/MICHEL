@@ -210,18 +210,6 @@ function ConfigurationCenter() {
   // tracking to itself trigger a re-render.
   const previousStatusRef = useRef(status);
 
-  // The catchup effect is intentionally narrow: it only depends on `status`,
-  // because `send` and `consumeCatchupIntent` come back from `useTeamsData`
-  // as fresh closures on every render. If we included them in the deps
-  // array the effect would re-run on every render of this component, and
-  // the cleanup below (clearTimeout) would wipe the notice-clearing timer
-  // before it ever got the chance to fire. We resolve the staleness risk
-  // by reading the two functions from a ref that is updated on every
-  // render — they are stable enough for our needs (they just delegate to
-  // the singleton).
-  const teamsDataApiRef = useRef({ send, consumeCatchupIntent });
-  teamsDataApiRef.current = { send, consumeCatchupIntent };
-
   useEffect(() => {
     const previous = previousStatusRef.current;
     previousStatusRef.current = status;
@@ -229,15 +217,16 @@ function ConfigurationCenter() {
     // `open` before". The very first open after page load is also caught
     // by this — that's fine, because `consumeCatchupIntent` returns null
     // when no pre-disconnect snapshot was captured, which is the case for
-    // the initial connection.
+    // the initial connection. `send` and `consumeCatchupIntent` are stable
+    // identities thanks to useTeamsData's useCallback wrapping, so this
+    // effect only re-runs on genuine status transitions.
     if (status !== "open" || previous === "open") return;
-    const snapshot = teamsDataApiRef.current.consumeCatchupIntent();
+    const snapshot = consumeCatchupIntent();
     const intent = buildCatchupIntent(snapshot);
     if (!intent) return;
-    teamsDataApiRef.current.send({ command: "catchup", value: intent });
+    send({ command: "catchup", value: intent });
     setResyncNotice("Resynchronized with the back-end after reconnect.");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, send, consumeCatchupIntent]);
 
   // Auto-dismiss the resync notice on its own clock, independently from the
   // catchup effect. Driving the timer here means it survives unrelated
