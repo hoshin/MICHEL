@@ -398,14 +398,92 @@ describe('MichelBackService', () => {
             expect(svc.getSeriesData().faceIt.matchId).toStrictEqual('')
         })
 
-        it('should apply team names and scores when the back is at defaults', () => {
+        it('should apply team names, logos and scores when the back is at defaults', () => {
             const svc = new MichelBackService([], false)
             svc.catchup(null, {
-                team1: { name: 'Alpha', score: 2 },
-                team2: { name: 'Bravo', score: 1 },
+                team1: { name: 'Alpha', score: 2, logo: 'https://alpha.png' },
+                team2: { name: 'Bravo', score: 1, logo: 'https://bravo.png' },
             })
-            expect(svc.getSeriesData().team1).toMatchObject({ name: 'Alpha', score: 2 })
-            expect(svc.getSeriesData().team2).toMatchObject({ name: 'Bravo', score: 1 })
+            expect(svc.getSeriesData().team1).toMatchObject({ name: 'Alpha', score: 2, logo: 'https://alpha.png' })
+            expect(svc.getSeriesData().team2).toMatchObject({ name: 'Bravo', score: 1, logo: 'https://bravo.png' })
+        })
+
+        it('should skip team1/team2 name catchup when matchId triggers a FaceIt fetch', () => {
+            const svc = new MichelBackService([], false)
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'new-match-id',
+                team1: { name: 'FrontAlpha' },
+                team2: { name: 'FrontBravo' },
+            })
+            // Names are left at defaults so the FaceIt response (which the
+            // mock skips here, but in production overwrites them) wins.
+            expect(svc.getSeriesData().team1.name).toStrictEqual('')
+            expect(svc.getSeriesData().team2.name).toStrictEqual('')
+        })
+
+        it('should skip team1/team2 logo catchup when matchId triggers a FaceIt fetch', () => {
+            const svc = new MichelBackService([], false)
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'new-match-id',
+                team1: { logo: 'https://front-alpha.png' },
+                team2: { logo: 'https://front-bravo.png' },
+            })
+            expect(svc.getSeriesData().team1.logo).toStrictEqual('')
+            expect(svc.getSeriesData().team2.logo).toStrictEqual('')
+        })
+
+        it('should still apply team scores even when matchId triggers a FaceIt fetch', () => {
+            // FaceIt does not provide scores, so the front-cached scores
+            // must still be honored under the normal back-at-default gate.
+            const svc = new MichelBackService([], false)
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'new-match-id',
+                team1: { name: 'FrontAlpha', score: 3 },
+                team2: { name: 'FrontBravo', score: 2 },
+            })
+            const data = svc.getSeriesData()
+            // Names skipped (FaceIt will overwrite), scores applied.
+            expect(data.team1.name).toStrictEqual('')
+            expect(data.team2.name).toStrictEqual('')
+            expect(data.team1.score).toStrictEqual(3)
+            expect(data.team2.score).toStrictEqual(2)
+        })
+
+        it('should NOT overwrite team logos already set on the back', () => {
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                team1: { name: '', score: 0, logo: 'existing-team1-logo' },
+                team2: { name: '', score: 0, logo: '' },
+            })
+            svc.catchup(null, {
+                team1: { logo: 'front-team1-logo' },
+                team2: { logo: 'front-team2-logo' },
+            })
+            const data = svc.getSeriesData()
+            // team1.logo was non-default -> kept; team2.logo was default -> applied.
+            expect(data.team1.logo).toStrictEqual('existing-team1-logo')
+            expect(data.team2.logo).toStrictEqual('front-team2-logo')
+        })
+
+        it('should apply team names and logos when no matchId fetch is triggered', () => {
+            // matchId is the same as the back's current value -> no fetch
+            // triggered, names/logos honor the normal back-at-default gate.
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                faceIt: { matchId: 'same-id' },
+            })
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'same-id',
+                team1: { name: 'Alpha', logo: 'alpha-logo' },
+                team2: { name: 'Bravo', logo: 'bravo-logo' },
+            })
+            const data = svc.getSeriesData()
+            expect(data.team1).toMatchObject({ name: 'Alpha', logo: 'alpha-logo' })
+            expect(data.team2).toMatchObject({ name: 'Bravo', logo: 'bravo-logo' })
         })
 
         it('should NOT overwrite team names/scores already mutated on the back', () => {

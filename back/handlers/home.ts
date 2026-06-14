@@ -617,12 +617,21 @@ export class MichelBackService {
      *   server state. The operator-driven configuration center is the
      *   sole source of truth for these.
      *
-     * - `team1.name` / `team1.score` / `team2.name` / `team2.score`:
-     *   applied only if the back's current value is at its default
-     *   (`''` for names, `0` for scores). This prevents the front-end
-     *   cache from clobbering concurrent mutations made via other
-     *   channels (notably the Stream Deck plugin, which pushes score
-     *   increments straight to the HTTP API).
+     * - `team1.score` / `team2.score`: applied only if the back's current
+     *   value is at its default (`0`). This prevents the front-end cache
+     *   from clobbering concurrent mutations made via other channels
+     *   (notably the Stream Deck plugin, which pushes score increments
+     *   straight to the HTTP API). FaceIt does not provide scores so
+     *   this gate is the sole arbiter.
+     *
+     * - `team1.name` / `team2.name` / `team1.logo` / `team2.logo`:
+     *   normally applied with the same "back-at-default" gate. BUT when
+     *   `faceItMatchId` is being asserted (i.e. a FaceIt lookup has just
+     *   been triggered), these fields are skipped entirely. The FaceIt
+     *   API response is the authoritative source for team names/logos and
+     *   will overwrite them shortly; eagerly applying the front-cached
+     *   values here would race against the fetch and produce a brief
+     *   flicker before being clobbered.
      *
      * If `faceItMatchId` differs and gets applied, the existing FaceIt
      * lookup pipeline is triggered (it broadcasts on its own), and we
@@ -682,12 +691,21 @@ export class MichelBackService {
             }
 
             // --- team1 / team2: only apply on top of defaults --------------
+            // The `skip` parameter short-circuits the field entirely; it
+            // exists so that fields the FaceIt lookup is about to overwrite
+            // (names and logos when matchId triggered a fetch) don't race
+            // against the async API response.
             const applyTeamField = (
                 teamKey: 'team1' | 'team2',
-                fieldKey: 'name' | 'score',
+                fieldKey: 'name' | 'score' | 'logo',
                 defaultValue: string | number,
                 meaningful: (v: any) => boolean,
+                skip: boolean = false,
             ) => {
+                if (skip) {
+                    skipped.push(`${teamKey}.${fieldKey}(faceit-will-overwrite)`)
+                    return
+                }
                 const teamPayload = intent[teamKey]
                 if (!teamPayload || typeof teamPayload !== 'object') return
                 const candidate = teamPayload[fieldKey]
@@ -700,10 +718,17 @@ export class MichelBackService {
                 applied.push(`${teamKey}.${fieldKey}`)
             }
 
-            applyTeamField('team1', 'name', '', v => typeof v === 'string' && v.length > 0)
-            applyTeamField('team2', 'name', '', v => typeof v === 'string' && v.length > 0)
-            applyTeamField('team1', 'score', 0, v => typeof v === 'number' && Number.isFinite(v) && v > 0)
-            applyTeamField('team2', 'score', 0, v => typeof v === 'number' && Number.isFinite(v) && v > 0)
+            const isMeaningfulString = (v: any) => typeof v === 'string' && v.length > 0
+            const isMeaningfulScore = (v: any) => typeof v === 'number' && Number.isFinite(v) && v > 0
+            // FaceIt's /v4/matches/{id} response overwrites names and logos
+            // but never touches scores, so only the former two are skipped
+            // when matchIdTriggeredFetch is true.
+            applyTeamField('team1', 'name', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team2', 'name', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team1', 'logo', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team2', 'logo', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team1', 'score', 0, isMeaningfulScore)
+            applyTeamField('team2', 'score', 0, isMeaningfulScore)
         }
 
         this.logger.info({ msg: 'catchup', applied, skipped })

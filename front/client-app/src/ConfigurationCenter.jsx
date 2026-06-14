@@ -169,29 +169,41 @@ function buildCatchupIntent(snapshot) {
   const mapCount = snapshot.display?.mapCount;
   if (typeof mapCount === "number" && Number.isFinite(mapCount) && mapCount >= 1)
     intent.mapCount = mapCount;
+  // Team logos are included alongside names/scores. The back applies the
+  // same skip-on-matchId rule to logos as to names: when a FaceIt fetch
+  // is being triggered the API response is treated as authoritative for
+  // both, and the front-cached values are dropped to avoid a flicker.
   const team1Name = snapshot.team1?.name;
   const team1Score = snapshot.team1?.score;
+  const team1Logo = snapshot.team1?.logo;
   if (
     (typeof team1Name === "string" && team1Name.length > 0) ||
-    (typeof team1Score === "number" && team1Score > 0)
+    (typeof team1Score === "number" && team1Score > 0) ||
+    (typeof team1Logo === "string" && team1Logo.length > 0)
   ) {
     intent.team1 = {};
     if (typeof team1Name === "string" && team1Name.length > 0)
       intent.team1.name = team1Name;
     if (typeof team1Score === "number" && team1Score > 0)
       intent.team1.score = team1Score;
+    if (typeof team1Logo === "string" && team1Logo.length > 0)
+      intent.team1.logo = team1Logo;
   }
   const team2Name = snapshot.team2?.name;
   const team2Score = snapshot.team2?.score;
+  const team2Logo = snapshot.team2?.logo;
   if (
     (typeof team2Name === "string" && team2Name.length > 0) ||
-    (typeof team2Score === "number" && team2Score > 0)
+    (typeof team2Score === "number" && team2Score > 0) ||
+    (typeof team2Logo === "string" && team2Logo.length > 0)
   ) {
     intent.team2 = {};
     if (typeof team2Name === "string" && team2Name.length > 0)
       intent.team2.name = team2Name;
     if (typeof team2Score === "number" && team2Score > 0)
       intent.team2.score = team2Score;
+    if (typeof team2Logo === "string" && team2Logo.length > 0)
+      intent.team2.logo = team2Logo;
   }
   return Object.keys(intent).length > 0 ? intent : null;
 }
