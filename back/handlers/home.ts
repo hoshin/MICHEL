@@ -191,6 +191,12 @@ export class MichelBackService {
             case 'team2UpdateBan':
                 this.teamUpdateBan(null, 'team2', payload.value);
                 break;
+            case 'setMapCount':
+                this.setMapCount(null, payload.value);
+                break;
+            case 'catchup':
+                this.catchup(null, payload.value);
+                break;
             default:
                 this.home(null)
         }
@@ -562,5 +568,183 @@ export class MichelBackService {
 
     getSeriesData(): SeriesData {
         return this.seriesData
+    }
+
+    /**
+     * Direct setter for the current map number. Unlike
+     * {@link updateMapCountAndRefreshFaceItDataIfNeeded}, this primitive
+     * does NOT trigger a FaceIt refresh: it is meant for cases where the
+     * caller already knows the exact target value (operator UI input,
+     * catchup from a reconnecting front-end) and either does not want or
+     * does not need a network round-trip as a side effect.
+     *
+     * The value is sanitized to an integer >= 1. Non-numeric or
+     * out-of-range payloads are ignored so a malformed client message
+     * cannot wedge the state.
+     */
+    setMapCount = (res: Response, rawValue: any) => {
+        const parsed = typeof rawValue === 'number' ? rawValue : Number(rawValue)
+        if (!Number.isFinite(parsed)) {
+            this.sendUpdatedStateToCaller(res)
+            return
+        }
+        const sanitized = Math.max(1, Math.floor(parsed))
+        if (sanitized === this.seriesData.display.mapCount) {
+            this.sendUpdatedStateToCaller(res)
+            return
+        }
+        this.seriesData.display.mapCount = sanitized
+        if (this.debug) {
+            this.logger.info({ msg: 'setMapCount', mapCount: sanitized })
+        }
+        this.sendUpdatedStateToCaller(res)
+    }
+
+    /**
+     * Re-assert a client's last-known intent after a reconnect.
+     *
+     * Called when the front-end's WebSocket reopens after a transient
+     * disconnect (typically caused by the Electron back-end fork being
+     * restarted, e.g. when the user saves a new FaceIt API key from the
+     * Settings dialog). The front-end sends the values it had cached at
+     * the moment of the disconnect; this method decides on a per-field
+     * basis whether to apply them, then performs a single broadcast.
+     *
+     * Field application policy:
+     *
+     * - `faceItMatchId`, `tournamentLogo`, `mapCount`: applied if the
+     *   field is present in the payload AND differs from the current
+     *   server state. The operator-driven configuration center is the
+     *   sole source of truth for these.
+     *
+     * - `team1.score` / `team2.score`: applied only if the back's current
+     *   value is at its default (`0`). This prevents the front-end cache
+     *   from clobbering concurrent mutations made via other channels
+     *   (notably the Stream Deck plugin, which pushes score increments
+     *   straight to the HTTP API). FaceIt does not provide scores so
+     *   this gate is the sole arbiter.
+     *
+     * - `team1.name` / `team2.name` / `team1.logo` / `team2.logo`:
+     *   normally applied with the same "back-at-default" gate. BUT when
+     *   `faceItMatchId` is being asserted (i.e. a FaceIt lookup has just
+     *   been triggered), these fields are skipped entirely. The FaceIt
+     *   API response is the authoritative source for team names/logos and
+     *   will overwrite them shortly; eagerly applying the front-cached
+     *   values here would race against the fetch and produce a brief
+     *   flicker before being clobbered.
+     *
+     * If `faceItMatchId` differs and gets applied, the existing FaceIt
+     * lookup pipeline is triggered (it broadcasts on its own), and we
+     * skip the trailing local broadcast to avoid an extra message.
+     *
+     * Malformed payloads (non-object root, unexpected types) are tolerated
+     * silently: every field is gated independently, and a single
+     * broadcast still goes out so the front-end can settle on the current
+     * server state.
+     */
+    catchup = (res: Response, intent: any) => {
+        const applied: string[] = []
+        const skipped: string[] = []
+        let matchIdTriggeredFetch = false
+
+        if (intent !== null && typeof intent === 'object' && !Array.isArray(intent)) {
+            // --- faceItMatchId ---------------------------------------------
+            if (typeof intent.faceItMatchId === 'string') {
+                if (intent.faceItMatchId !== this.seriesData.faceIt.matchId) {
+                    if (intent.faceItMatchId.length > 0) {
+                        // Defer broadcast: initialMatchDataFromFaceItMatchId
+                        // broadcasts on completion.
+                        this.seriesData.faceIt.matchId = intent.faceItMatchId
+                        this.initialMatchDataFromFaceItMatchId(null, intent.faceItMatchId)
+                        matchIdTriggeredFetch = true
+                    } else {
+                        this.seriesData.faceIt.matchId = ''
+                    }
+                    applied.push('faceItMatchId')
+                } else {
+                    skipped.push('faceItMatchId(same)')
+                }
+            }
+
+            // --- tournamentLogo --------------------------------------------
+            if (typeof intent.tournamentLogo === 'string') {
+                if (intent.tournamentLogo !== this.seriesData.display.tournamentLogo) {
+                    this.seriesData.display.tournamentLogo = intent.tournamentLogo
+                    applied.push('tournamentLogo')
+                } else {
+                    skipped.push('tournamentLogo(same)')
+                }
+            }
+
+            // --- mapCount --------------------------------------------------
+            if (intent.mapCount !== undefined) {
+                const parsed = typeof intent.mapCount === 'number' ? intent.mapCount : Number(intent.mapCount)
+                if (Number.isFinite(parsed)) {
+                    const sanitized = Math.max(1, Math.floor(parsed))
+                    if (sanitized !== this.seriesData.display.mapCount) {
+                        this.seriesData.display.mapCount = sanitized
+                        applied.push('mapCount')
+                    } else {
+                        skipped.push('mapCount(same)')
+                    }
+                }
+            }
+
+            // --- team1 / team2: only apply on top of defaults --------------
+            // The `skip` parameter short-circuits the field entirely; it
+            // exists so that fields the FaceIt lookup is about to overwrite
+            // (names and logos when matchId triggered a fetch) don't race
+            // against the async API response.
+            const applyTeamField = (
+                teamKey: 'team1' | 'team2',
+                fieldKey: 'name' | 'score' | 'logo',
+                defaultValue: string | number,
+                meaningful: (v: any) => boolean,
+                skip: boolean = false,
+            ) => {
+                if (skip) {
+                    skipped.push(`${teamKey}.${fieldKey}(faceit-will-overwrite)`)
+                    return
+                }
+                const teamPayload = intent[teamKey]
+                if (!teamPayload || typeof teamPayload !== 'object') return
+                const candidate = teamPayload[fieldKey]
+                if (!meaningful(candidate)) return
+                if (this.seriesData[teamKey][fieldKey] !== defaultValue) {
+                    skipped.push(`${teamKey}.${fieldKey}(non-default-on-back)`)
+                    return
+                }
+                this.seriesData[teamKey][fieldKey] = candidate as never
+                applied.push(`${teamKey}.${fieldKey}`)
+            }
+
+            const isMeaningfulString = (v: any) => typeof v === 'string' && v.length > 0
+            const isMeaningfulScore = (v: any) => typeof v === 'number' && Number.isFinite(v) && v > 0
+            // FaceIt's /v4/matches/{id} response overwrites names and logos
+            // but never touches scores, so only the former two are skipped
+            // when matchIdTriggeredFetch is true.
+            applyTeamField('team1', 'name', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team2', 'name', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team1', 'logo', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team2', 'logo', '', isMeaningfulString, matchIdTriggeredFetch)
+            applyTeamField('team1', 'score', 0, isMeaningfulScore)
+            applyTeamField('team2', 'score', 0, isMeaningfulScore)
+        }
+
+        this.logger.info({ msg: 'catchup', applied, skipped })
+
+        // initialMatchDataFromFaceItMatchId triggers its own async broadcast
+        // once the FaceIt fetch settles. If we also broadcast synchronously
+        // here, the front would see the partially-updated state first and
+        // the post-fetch state second; that's fine on the wire but noisy.
+        // We still broadcast once if no fetch was triggered so the scenes
+        // see all the other applied fields immediately.
+        if (!matchIdTriggeredFetch) {
+            this.sendUpdatedStateToCaller(res)
+        } else if (res && !res.headersSent) {
+            // Echo current state back to the HTTP caller (if any) without
+            // re-broadcasting to the WS pool — the FaceIt fetch will do that.
+            res.json(this.seriesData)
+        }
     }
 }

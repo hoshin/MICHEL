@@ -1,28 +1,14 @@
-import { useState } from "react";
 import "./components/TeamForm.jsx";
 import { TeamForm } from "./components/TeamForm.jsx";
 import MapSetup from "./components/MapSetup.jsx";
 
 import "./ConfigurationCenter.css";
-import {
-  DEFAULT_LOGO,
-  DEFAULT_STATE,
-  FACEIT_LOGO,
-  WEBSOCKET_URL,
-} from "./config.js";
+import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
 import { portraits } from "./TeamBanInput.jsx";
 import { Card, Flex, Table } from "antd";
-
-const socket = new WebSocket(WEBSOCKET_URL);
-
-socket.addEventListener("open", (event) => {
-  socket.send(JSON.stringify({ init: 1 }));
-});
-
-let setTeamsDataWS = () => {};
-socket.addEventListener("message", (event) => {
-  setTeamsDataWS(JSON.parse(event.data));
-});
+import { useEffect, useRef, useState } from "react";
+import { useTeamsData } from "./teamsDataSocket.ts";
+import ConnectionBadge from "./components/ConnectionBadge.jsx";
 
 function copyURI(evt) {
   evt.preventDefault();
@@ -166,18 +152,115 @@ const data = [
   },
 ];
 
-function ConfigurationCenter() {
-  const [teamsData, setTeamsData] = useState(DEFAULT_STATE);
+// Build the catchup payload from the snapshot we captured before the last
+// disconnect. We only forward fields that are *meaningful* (non-empty
+// strings, scores > 0, mapCount >= 1); the back applies a second layer of
+// gating (only overwrite team names/scores when at defaults), so this is a
+// belt-and-braces filter that keeps the wire payload small and the log
+// noise low.
+function buildCatchupIntent(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const intent = {};
+  const matchId = snapshot.faceIt?.matchId;
+  if (typeof matchId === "string") intent.faceItMatchId = matchId;
+  const tournamentLogo = snapshot.display?.tournamentLogo;
+  if (typeof tournamentLogo === "string")
+    intent.tournamentLogo = tournamentLogo;
+  const mapCount = snapshot.display?.mapCount;
+  if (typeof mapCount === "number" && Number.isFinite(mapCount) && mapCount >= 1)
+    intent.mapCount = mapCount;
+  // Team logos are included alongside names/scores. The back applies the
+  // same skip-on-matchId rule to logos as to names: when a FaceIt fetch
+  // is being triggered the API response is treated as authoritative for
+  // both, and the front-cached values are dropped to avoid a flicker.
+  const team1Name = snapshot.team1?.name;
+  const team1Score = snapshot.team1?.score;
+  const team1Logo = snapshot.team1?.logo;
+  if (
+    (typeof team1Name === "string" && team1Name.length > 0) ||
+    (typeof team1Score === "number" && team1Score > 0) ||
+    (typeof team1Logo === "string" && team1Logo.length > 0)
+  ) {
+    intent.team1 = {};
+    if (typeof team1Name === "string" && team1Name.length > 0)
+      intent.team1.name = team1Name;
+    if (typeof team1Score === "number" && team1Score > 0)
+      intent.team1.score = team1Score;
+    if (typeof team1Logo === "string" && team1Logo.length > 0)
+      intent.team1.logo = team1Logo;
+  }
+  const team2Name = snapshot.team2?.name;
+  const team2Score = snapshot.team2?.score;
+  const team2Logo = snapshot.team2?.logo;
+  if (
+    (typeof team2Name === "string" && team2Name.length > 0) ||
+    (typeof team2Score === "number" && team2Score > 0) ||
+    (typeof team2Logo === "string" && team2Logo.length > 0)
+  ) {
+    intent.team2 = {};
+    if (typeof team2Name === "string" && team2Name.length > 0)
+      intent.team2.name = team2Name;
+    if (typeof team2Score === "number" && team2Score > 0)
+      intent.team2.score = team2Score;
+    if (typeof team2Logo === "string" && team2Logo.length > 0)
+      intent.team2.logo = team2Logo;
+  }
+  return Object.keys(intent).length > 0 ? intent : null;
+}
 
-  setTeamsDataWS = setTeamsData;
+// How long the "Resynchronized" notice stays on screen after a successful
+// catchup. Short enough that the operator does not have to dismiss it, long
+// enough to actually catch the eye.
+const RESYNC_NOTICE_DURATION_MS = 3000;
+
+function ConfigurationCenter() {
+  const { teamsData, status, send, consumeCatchupIntent } = useTeamsData();
+  const [resyncNotice, setResyncNotice] = useState(null);
+  // Track the previous status so we can detect the transition into `open`
+  // that follows a disconnect (i.e. a reconnect) and fire a catchup. We
+  // use a ref rather than state because we don't want this transition
+  // tracking to itself trigger a re-render.
+  const previousStatusRef = useRef(status);
+
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = status;
+    // A reconnect is "we just transitioned into `open`, and we were not
+    // `open` before". The very first open after page load is also caught
+    // by this — that's fine, because `consumeCatchupIntent` returns null
+    // when no pre-disconnect snapshot was captured, which is the case for
+    // the initial connection. `send` and `consumeCatchupIntent` are stable
+    // identities thanks to useTeamsData's useCallback wrapping, so this
+    // effect only re-runs on genuine status transitions.
+    if (status !== "open" || previous === "open") return;
+    const snapshot = consumeCatchupIntent();
+    const intent = buildCatchupIntent(snapshot);
+    if (!intent) return;
+    send({ command: "catchup", value: intent });
+    setResyncNotice("Resynchronized with the back-end after reconnect.");
+  }, [status, send, consumeCatchupIntent]);
+
+  // Auto-dismiss the resync notice on its own clock, independently from the
+  // catchup effect. Driving the timer here means it survives unrelated
+  // re-renders (every server broadcast triggers one) — the previous version
+  // collocated the timer with the catchup effect and saw it cleared on
+  // every render, so the notice stayed up forever.
+  useEffect(() => {
+    if (!resyncNotice) return;
+    const timer = setTimeout(
+      () => setResyncNotice(null),
+      RESYNC_NOTICE_DURATION_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [resyncNotice]);
 
   const sendCommandHandler = (command) => (event) => {
     event.preventDefault();
-    socket.send(JSON.stringify({ command, value: event.target.value }));
+    send({ command, value: event.target.value });
   };
 
   const noEventSendCommandHandler = () => (payload) => {
-    socket.send(JSON.stringify(payload));
+    send(payload);
   };
 
   const {
@@ -214,6 +297,26 @@ function ConfigurationCenter() {
     <Flex vertical>
       <Flex justify={"center"} align={"center"}>
         <div className="app-name">M.I.C.H.E.L.</div>
+        <ConnectionBadge/>
+      </Flex>
+      <Flex>
+        {resyncNotice ? (
+            <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 4,
+                  background: "rgba(70, 163, 94, 0.15)",
+                  color: "#46a35e",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
+                }}
+            >
+              {resyncNotice}
+            </div>
+        ) : null}
       </Flex>
       <Flex justify={"space-between"} align={"center"}>
         <TeamForm

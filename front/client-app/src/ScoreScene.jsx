@@ -1,28 +1,11 @@
-import { useState } from "react";
 import "./ScoreScene.css";
 import RightScore from "./RightScore.jsx";
 import LeftScore from "./LeftScore.jsx";
-import {
-  DEFAULT_LOGO,
-  DEFAULT_STATE,
-  FACEIT_LOGO,
-  WEBSOCKET_URL,
-} from "./config.js";
-
-const socket = new WebSocket(WEBSOCKET_URL);
-
-socket.addEventListener("open", (event) => {
-  socket.send(JSON.stringify({ init: 1 }));
-});
-
-let setTeamsDataWS = () => {};
-socket.addEventListener("message", (event) => {
-  setTeamsDataWS(JSON.parse(event.data));
-});
+import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
+import { useTeamsData } from "./teamsDataSocket.ts";
 
 function ScoreScene() {
-  const [teamsData, setTeamsData] = useState(DEFAULT_STATE);
-  setTeamsDataWS = setTeamsData;
+  const { teamsData } = useTeamsData();
   const {
     score: team1Score,
     name: team1Name,

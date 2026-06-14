@@ -305,6 +305,249 @@ describe('MichelBackService', () => {
         })
     })
 
+    describe('setMapCount', () => {
+        it('should set mapCount to the provided value', () => {
+            const svc = new MichelBackService([], false)
+            svc.setMapCount(null, 4)
+            expect(svc.getSeriesData().display.mapCount).toStrictEqual(4)
+        })
+
+        it('should coerce a numeric string to a number', () => {
+            const svc = new MichelBackService([], false)
+            svc.setMapCount(null, '3')
+            expect(svc.getSeriesData().display.mapCount).toStrictEqual(3)
+        })
+
+        it('should clamp to a minimum of 1 for zero / negative input', () => {
+            const svc = new MichelBackService([], false)
+            svc.setMapCount(null, -7)
+            expect(svc.getSeriesData().display.mapCount).toStrictEqual(1)
+            svc.setMapCount(null, 0)
+            expect(svc.getSeriesData().display.mapCount).toStrictEqual(1)
+        })
+
+        it('should floor non-integer values', () => {
+            const svc = new MichelBackService([], false)
+            svc.setMapCount(null, 3.9)
+            expect(svc.getSeriesData().display.mapCount).toStrictEqual(3)
+        })
+
+        it('should leave mapCount untouched and still broadcast when the value is unparseable', () => {
+            const svc = new MichelBackService([], false)
+            const broadcastSpy = jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {})
+            svc.setMapCount(null, 'not-a-number')
+            expect(svc.getSeriesData().display.mapCount).toStrictEqual(1)
+            expect(broadcastSpy).toHaveBeenCalledTimes(1)
+        })
+
+        it('should NOT trigger any FaceIt fetch even when standings are missing for the target map', () => {
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                faceIt: { matchId: 'some-id' },
+            })
+            const fetchSpy = jest.spyOn(svc, 'fetchFaceItMatchUpdates').mockImplementation(() => {})
+            svc.setMapCount(null, 5)
+            expect(fetchSpy).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('catchup', () => {
+        it('should be a no-op (just broadcast) when given a non-object payload', () => {
+            const svc = new MichelBackService([], false)
+            const broadcastSpy = jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {})
+            svc.catchup(null, null)
+            svc.catchup(null, 'string')
+            svc.catchup(null, [1, 2])
+            expect(broadcastSpy).toHaveBeenCalledTimes(3)
+            expect(svc.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
+        })
+
+        it('should apply tournamentLogo and mapCount when they differ from current state', () => {
+            const svc = new MichelBackService([], false)
+            svc.catchup(null, { tournamentLogo: 'https://logo', mapCount: 4 })
+            expect(svc.getSeriesData().display.tournamentLogo).toStrictEqual('https://logo')
+            expect(svc.getSeriesData().display.mapCount).toStrictEqual(4)
+        })
+
+        it('should NOT trigger a FaceIt fetch when faceItMatchId is unchanged', () => {
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                faceIt: { matchId: 'same-id' },
+            })
+            const fetchSpy = jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, { faceItMatchId: 'same-id' })
+            expect(fetchSpy).not.toHaveBeenCalled()
+        })
+
+        it('should trigger a FaceIt fetch when faceItMatchId changes to a non-empty value', () => {
+            const svc = new MichelBackService([], false)
+            const fetchSpy = jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, { faceItMatchId: 'new-match-id' })
+            expect(fetchSpy).toHaveBeenCalledWith(null, 'new-match-id')
+            expect(svc.getSeriesData().faceIt.matchId).toStrictEqual('new-match-id')
+        })
+
+        it('should clear matchId without triggering a FaceIt fetch when payload sets it to empty string', () => {
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                faceIt: { matchId: 'previous-id' },
+            })
+            const fetchSpy = jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, { faceItMatchId: '' })
+            expect(fetchSpy).not.toHaveBeenCalled()
+            expect(svc.getSeriesData().faceIt.matchId).toStrictEqual('')
+        })
+
+        it('should apply team names, logos and scores when the back is at defaults', () => {
+            const svc = new MichelBackService([], false)
+            svc.catchup(null, {
+                team1: { name: 'Alpha', score: 2, logo: 'https://alpha.png' },
+                team2: { name: 'Bravo', score: 1, logo: 'https://bravo.png' },
+            })
+            expect(svc.getSeriesData().team1).toMatchObject({ name: 'Alpha', score: 2, logo: 'https://alpha.png' })
+            expect(svc.getSeriesData().team2).toMatchObject({ name: 'Bravo', score: 1, logo: 'https://bravo.png' })
+        })
+
+        it('should skip team1/team2 name catchup when matchId triggers a FaceIt fetch', () => {
+            const svc = new MichelBackService([], false)
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'new-match-id',
+                team1: { name: 'FrontAlpha' },
+                team2: { name: 'FrontBravo' },
+            })
+            // Names are left at defaults so the FaceIt response (which the
+            // mock skips here, but in production overwrites them) wins.
+            expect(svc.getSeriesData().team1.name).toStrictEqual('')
+            expect(svc.getSeriesData().team2.name).toStrictEqual('')
+        })
+
+        it('should skip team1/team2 logo catchup when matchId triggers a FaceIt fetch', () => {
+            const svc = new MichelBackService([], false)
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'new-match-id',
+                team1: { logo: 'https://front-alpha.png' },
+                team2: { logo: 'https://front-bravo.png' },
+            })
+            expect(svc.getSeriesData().team1.logo).toStrictEqual('')
+            expect(svc.getSeriesData().team2.logo).toStrictEqual('')
+        })
+
+        it('should still apply team scores even when matchId triggers a FaceIt fetch', () => {
+            // FaceIt does not provide scores, so the front-cached scores
+            // must still be honored under the normal back-at-default gate.
+            const svc = new MichelBackService([], false)
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'new-match-id',
+                team1: { name: 'FrontAlpha', score: 3 },
+                team2: { name: 'FrontBravo', score: 2 },
+            })
+            const data = svc.getSeriesData()
+            // Names skipped (FaceIt will overwrite), scores applied.
+            expect(data.team1.name).toStrictEqual('')
+            expect(data.team2.name).toStrictEqual('')
+            expect(data.team1.score).toStrictEqual(3)
+            expect(data.team2.score).toStrictEqual(2)
+        })
+
+        it('should NOT overwrite team logos already set on the back', () => {
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                team1: { name: '', score: 0, logo: 'existing-team1-logo' },
+                team2: { name: '', score: 0, logo: '' },
+            })
+            svc.catchup(null, {
+                team1: { logo: 'front-team1-logo' },
+                team2: { logo: 'front-team2-logo' },
+            })
+            const data = svc.getSeriesData()
+            // team1.logo was non-default -> kept; team2.logo was default -> applied.
+            expect(data.team1.logo).toStrictEqual('existing-team1-logo')
+            expect(data.team2.logo).toStrictEqual('front-team2-logo')
+        })
+
+        it('should apply team names and logos when no matchId fetch is triggered', () => {
+            // matchId is the same as the back's current value -> no fetch
+            // triggered, names/logos honor the normal back-at-default gate.
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                faceIt: { matchId: 'same-id' },
+            })
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            svc.catchup(null, {
+                faceItMatchId: 'same-id',
+                team1: { name: 'Alpha', logo: 'alpha-logo' },
+                team2: { name: 'Bravo', logo: 'bravo-logo' },
+            })
+            const data = svc.getSeriesData()
+            expect(data.team1).toMatchObject({ name: 'Alpha', logo: 'alpha-logo' })
+            expect(data.team2).toMatchObject({ name: 'Bravo', logo: 'bravo-logo' })
+        })
+
+        it('should NOT overwrite team names/scores already mutated on the back', () => {
+            const svc = new MichelBackService([], false, {
+                ...structuredClone(DEFAULT_SERIES_DATA),
+                team1: { name: 'Existing', score: 5, logo: '' },
+                team2: { name: '', score: 3, logo: '' },
+            })
+            svc.catchup(null, {
+                team1: { name: 'FromFront', score: 9 },
+                team2: { name: 'FromFront', score: 9 },
+            })
+            const data = svc.getSeriesData()
+            // team1.name stays 'Existing', team1.score stays 5
+            expect(data.team1.name).toStrictEqual('Existing')
+            expect(data.team1.score).toStrictEqual(5)
+            // team2.name was at default '' -> applied; team2.score was 3 -> kept
+            expect(data.team2.name).toStrictEqual('FromFront')
+            expect(data.team2.score).toStrictEqual(3)
+        })
+
+        it('should ignore meaningless team payloads (empty name, zero score)', () => {
+            const svc = new MichelBackService([], false)
+            svc.catchup(null, {
+                team1: { name: '', score: 0 },
+                team2: { name: '', score: 0 },
+            })
+            const data = svc.getSeriesData()
+            expect(data.team1.name).toStrictEqual('')
+            expect(data.team1.score).toStrictEqual(0)
+            expect(data.team2.name).toStrictEqual('')
+            expect(data.team2.score).toStrictEqual(0)
+        })
+
+        it('should broadcast exactly once when no FaceIt fetch is triggered', () => {
+            const svc = new MichelBackService([], false)
+            const broadcastSpy = jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {})
+            svc.catchup(null, { tournamentLogo: 'logo', mapCount: 3 })
+            expect(broadcastSpy).toHaveBeenCalledTimes(1)
+        })
+
+        it('should skip the trailing local broadcast when a FaceIt fetch is triggered', () => {
+            const svc = new MichelBackService([], false)
+            jest.spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            const broadcastSpy = jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {})
+            svc.catchup(null, { faceItMatchId: 'new-id', tournamentLogo: 'logo' })
+            expect(broadcastSpy).not.toHaveBeenCalled()
+        })
+
+        it('should be wired into handleCommand', () => {
+            const svc = new MichelBackService([], false)
+            const catchupSpy = jest.spyOn(svc, 'catchup').mockImplementation(() => {})
+            svc.handleCommand(Buffer.from(JSON.stringify({ command: 'catchup', value: { mapCount: 5 } })))
+            expect(catchupSpy).toHaveBeenCalledWith(null, { mapCount: 5 })
+        })
+
+        it('should wire setMapCount through handleCommand', () => {
+            const svc = new MichelBackService([], false)
+            const setSpy = jest.spyOn(svc, 'setMapCount').mockImplementation(() => {})
+            svc.handleCommand(Buffer.from(JSON.stringify({ command: 'setMapCount', value: 7 })))
+            expect(setSpy).toHaveBeenCalledWith(null, 7)
+        })
+    })
+
     describe('updateMapCountAndRefreshFaceItDataIfNeeded', () => {
         it('should increment the mapCount by the provided counter', () => {
             // setup

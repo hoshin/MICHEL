@@ -1,24 +1,11 @@
-import { useState } from "react";
 import "./GameScene.css";
 import LeftBar from "./LeftBar.jsx";
 import RightBar from "./RightBar.jsx";
 import { MapCount } from "./MapCount.jsx";
-import { DEFAULT_STATE, WEBSOCKET_URL } from "./config.js";
-
-const socket = new WebSocket(WEBSOCKET_URL);
-
-socket.addEventListener("open", (event) => {
-  socket.send(JSON.stringify({ init: 1 }));
-});
-
-let setTeamsDataWS = () => {};
-socket.addEventListener("message", (event) => {
-  setTeamsDataWS(JSON.parse(event.data));
-});
+import { useTeamsData } from "./teamsDataSocket.ts";
 
 function GameScene() {
-  const [teamsData, setTeamsData] = useState(DEFAULT_STATE);
-  setTeamsDataWS = setTeamsData;
+  const { teamsData } = useTeamsData();
   const {
     score: team1Score,
     name: team1Name,
