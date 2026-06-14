@@ -235,6 +235,15 @@
       }
 
       async function save() {
+        // Snapshot AND normalize the input synchronously, before any await.
+        // - Snapshot: reading apiKeyInput.value after the await would capture
+        //   whatever the user typed during the (potentially multi-second)
+        //   back-end restart, so the value we sent to main and the value we
+        //   record as the new baseline could diverge.
+        // - Normalize: main.js trims the key server-side, so if we don't trim
+        //   here too, originalKey would be set to the untrimmed text and the
+        //   field would immediately look "dirty" right after a successful save.
+        const normalizedKey = apiKeyInput.value.trim();
         busy = true;
         refreshButtons();
         setStatus("Saving and restarting back-end...", "info");
@@ -243,10 +252,13 @@
         // operation succeeded.
         try {
           const result = await window.michelSettings.saveFaceItKey(
-            apiKeyInput.value,
+            normalizedKey,
           );
           if (result && result.ok) {
-            originalKey = apiKeyInput.value;
+            // Assign only on success: a failed save means the on-disk key is
+            // still the previous one, and the baseline must keep reflecting
+            // that so the user can retry or discard.
+            originalKey = normalizedKey;
             setStatus(
               "Saved. The back-end was reloaded with the new key and the main window has refreshed its connection.",
               "success",
