@@ -119,6 +119,9 @@ describe('MichelBackService', () => {
             expect(res.json).toHaveBeenCalledWith(
                 {
                     "display": {
+                        "countdown": 0,
+                        "countdownColor": "",
+                        "countdownRunning": false,
                         "customCounter": 0,
                         "left": "team2",
                         "mapCount": 1,
@@ -154,6 +157,9 @@ describe('MichelBackService', () => {
             const michelBackService = new MichelBackService(connectionPool, false)
             const expectedResponse = JSON.stringify({
                 "display": {
+                    "countdown": 0,
+                    "countdownColor": "",
+                    "countdownRunning": false,
                     "customCounter": 0,
                     "left": "team2",
                     "mapCount": 1,

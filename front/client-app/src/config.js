@@ -21,6 +21,9 @@ export const DEFAULT_STATE = {
     mapFormat: "FT3",
     tournamentLogo: "",
     optionalLogoDisplay: true,
+    countdown: 0,
+    countdownRunning: false,
+    countdownColor: "",
   },
   standings: {
     match1: {

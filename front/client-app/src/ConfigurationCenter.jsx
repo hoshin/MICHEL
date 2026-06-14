@@ -1,6 +1,7 @@
 import "./components/TeamForm.jsx";
 import { TeamForm } from "./components/TeamForm.jsx";
 import MapSetup from "./components/MapSetup.jsx";
+import CountdownTimer from "./components/CountdownTimer.jsx";
 
 import "./ConfigurationCenter.css";
 import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
@@ -9,6 +10,7 @@ import { Card, Flex, Table } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useTeamsData } from "./teamsDataSocket.ts";
 import ConnectionBadge from "./components/ConnectionBadge.jsx";
+import { PlayCircleOutlined, PauseCircleOutlined } from "@ant-design/icons";
 
 function copyURI(evt) {
   evt.preventDefault();
@@ -128,27 +130,27 @@ const data = [
   },
   {
     key: "10",
-    name: "Casters Scene",
-    url: "/casters-scene",
-    profile: "Display, Sample",
-  },
-  {
-    key: "11",
     name: "Team 1 Ban (input)",
     url: "/team-1-ban-input",
     profile: "Input",
   },
   {
-    key: "12",
+    key: "11",
     name: "Team 2 Ban (input)",
     url: "/team-2-ban-input",
     profile: "Input",
   },
   {
-    key: "13",
+    key: "12",
     name: "Tournament Logo",
     url: "/tournament-logo",
     profile: "Display, Match production",
+  },
+  {
+    key: "13",
+    name: "Countdown Timer",
+    url: "/countdown",
+    profile: "Display",
   },
 ];
 
@@ -216,6 +218,9 @@ const RESYNC_NOTICE_DURATION_MS = 3000;
 function ConfigurationCenter() {
   const { teamsData, status, send, consumeCatchupIntent } = useTeamsData();
   const [resyncNotice, setResyncNotice] = useState(null);
+  const [timerValue, setTimerValue] = useState(60);
+  const countdownRef = useRef(null);
+  const currentRef = useRef(null);
   // Track the previous status so we can detect the transition into `open`
   // that follows a disconnect (i.e. a reconnect) and fire a catchup. We
   // use a ref rather than state because we don't want this transition
@@ -253,7 +258,54 @@ function ConfigurationCenter() {
     );
     return () => clearTimeout(timer);
   }, [resyncNotice]);
+    const runInterval = (from) => {
+        currentRef.current = from;
+        notifyCountdown(from);
+        setRunning(true);
+        countdownRef.current = setInterval(() => {
+            currentRef.current = currentRef.current <= 1 ? 0 : currentRef.current - 1;
+            notifyCountdown(currentRef.current);
+            if (currentRef.current === 0) {
+                clearInterval(countdownRef.current);
+                countdownRef.current = null;
+                setRunning(false);
+            }
+        }, 1000);
+    };
 
+    // Countdown lives on the back-end now, so we just read its current
+    // running state and forward user actions as commands. This keeps every
+    // open overlay (including OBS browser sources) perfectly in sync, and
+    // lets the timer survive a Config Center reload.
+    const running = !!teamsData?.display?.countdownRunning;
+    const currentValue = teamsData?.display?.countdown ?? 0;
+
+    const startStopCountdown = () => {
+        if (running) {
+            send({ command: "countdownPause" });
+        } else if (currentValue > 0) {
+            // Currently paused — resume from where we left off.
+            send({ command: "countdownResume" });
+        } else {
+            // Idle — start fresh from the configured value.
+            send({ command: "countdownStart", value: timerValue });
+        }
+    };
+
+    const resetCountdown = () => {
+        send({ command: "countdownReset", value: timerValue });
+    };
+    // Native <input type="color"> always returns a `#rrggbb` string and
+    // cannot represent "no color" — so we keep the picker showing the
+    // currently broadcast color (or black as a neutral default) and provide
+    // a separate Reset button to clear the override.
+    const countdownColor = teamsData?.display?.countdownColor ?? "";
+    const updateCountdownColor = (event) => {
+        send({ command: "countdownSetColor", value: event.target.value });
+    };
+    const resetCountdownColor = () => {
+        send({ command: "countdownSetColor", value: "" });
+    };
   const sendCommandHandler = (command) => (event) => {
     event.preventDefault();
     send({ command, value: event.target.value });
@@ -390,7 +442,7 @@ function ConfigurationCenter() {
               defaultValue={logo}
             />
             <div className="logo-preview">
-              {!!logo ? <img height="60px" src={logo}></img> : null}
+              {logo ? <img height="60px" src={logo}></img> : null}
               <div>Show in mini-score</div>
               <input
                 type="checkbox"
@@ -428,6 +480,102 @@ function ConfigurationCenter() {
             >
               Refresh room data
             </button>
+          </Flex>
+        </Card>
+      </Flex>
+
+      <Flex>
+        <Card
+          size={"small"}
+          title={"Timer"}
+          style={{ width: "100%", backgroundColor: "#a1a1a1" }}
+        >
+          <Flex vertical gap={"small"}>
+            <Flex justify={"space-between"} align={"center"} gap={"middle"}>
+              <Flex vertical style={{ flexShrink: 0 }}>
+                <div>Duration (seconds)</div>
+                <input
+                  type="number"
+                  min={1}
+                  value={timerValue}
+                  onChange={(e) =>
+                    setTimerValue(Math.max(1, parseInt(e.target.value, 10) || 1))
+                  }
+                  style={{ width: "100px" }}
+                />
+              </Flex>
+              <Flex gap={"small"} wrap={"wrap"}>
+                <button
+                  style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
+                  onClick={startStopCountdown}
+                >
+                  {running ? (
+                    <>
+                      Pause <PauseCircleOutlined />
+                    </>
+                  ) : (
+                    <>
+                      Start <PlayCircleOutlined />
+                    </>
+                  )}
+                </button>
+                <button
+                  style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
+                  onClick={resetCountdown}
+                >
+                  Reset
+                </button>
+              </Flex>
+              <div
+                style={{
+                  fontSize: "1.8em",
+                  fontWeight: 800,
+                  minWidth: "4ch",
+                  textAlign: "center",
+                }}
+              >
+                <CountdownTimer fontSize={"1em"} />
+              </div>
+            </Flex>
+            <Flex align={"center"} gap={"small"}>
+              <label htmlFor="countdown-color-picker">Color</label>
+              <input
+                id="countdown-color-picker"
+                type="color"
+                value={countdownColor || "#000000"}
+                onChange={updateCountdownColor}
+                title={
+                  countdownColor
+                    ? `Currently using ${countdownColor}`
+                    : "Using the default color"
+                }
+                style={{
+                  width: "40px",
+                  height: "28px",
+                  padding: 0,
+                  border: "1px solid #555",
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
+              />
+              <button
+                style={{ fontWeight: 600, padding: "0.3em 0.8em" }}
+                onClick={resetCountdownColor}
+                disabled={!countdownColor}
+                title={"Clear the color override and use the default"}
+              >
+                Reset color
+              </button>
+              {countdownColor ? (
+                <span style={{ fontSize: "0.85em", color: "#333" }}>
+                  Active: <code>{countdownColor}</code>
+                </span>
+              ) : (
+                <span style={{ fontSize: "0.85em", color: "#333", fontStyle: "italic" }}>
+                  Using default
+                </span>
+              )}
+            </Flex>
           </Flex>
         </Card>
       </Flex>

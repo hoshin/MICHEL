@@ -1,0 +1,27 @@
+/*
+ * Default look of the <CountdownTimer /> component.
+ *
+ * The `font-size` is sized relative to the viewport so an OBS browser
+ * source rendering /countdown-scene at any reasonable dimensions fills
+ * naturally without the user needing to touch CSS: the source's own width
+ * and height ARE the viewport. The clamp() bounds prevent the text from
+ * becoming illegibly tiny on a small source or absurdly huge on a very
+ * tall one.
+ *
+ * Per-context overrides (e.g. the small embedded preview rendered inside
+ * the Configuration Center) are passed through the component's
+ * `fontSize` / `color` props rather than by adding new CSS rules here.
+ */
+.countdown-timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-family: BigNoodleTitling, serif;
+  font-size: clamp(2em, 25vh, 30em);
+  /* Likely to become a per-context prop soon (white-on-dark overlays). */
+  color: #000;
+  background-color: transparent;
+  margin: 0;
+  padding: 0;
+}

@@ -8,6 +8,7 @@ import TeamScore from "./TeamScore.jsx";
 import CurrentMap from "./CurrentMap.jsx";
 import TeamBan from "./TeamBan.jsx";
 import TournamentLogo from "./TournamentLogo.jsx";
+import CountdownScene from "./CountdownScene.jsx";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
       <Route path="/team-2-ban" element={<TeamBan team={2} />} />
       <Route path="/solo-score-scene" element={<SoloScoreScene />} />
       <Route path="/tournament-logo" element={<TournamentLogo />} />
+      <Route path="/countdown" element={<CountdownScene />} />
       {/*<Route path="/team-1-ban-input" element={<TeamBanInput team={1} handler={noop}/>}></Route>*/}
       {/*<Route path="/team-2-ban-input" element={<TeamBanInput team={2} handler={noop}/>}></Route>*/}
       <Route path="*" element={<ConfigurationCenter />} />
