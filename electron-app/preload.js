@@ -1,4 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron')
+const fs = require('node:fs')
+const path = require('node:path')
+
+const logoPath = path.join(__dirname, 'images', 'logo_56.png')
+let logoDataUri = ''
+try {
+    logoDataUri = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+} catch (err) {
+    console.error(`Failed to load loading logo at ${logoPath}`, err)
+}
 
 contextBridge.exposeInMainWorld('versions', {
     node: () => process.versions.node,
@@ -70,9 +80,12 @@ function useLoading() {
 }
 .${className} > div {
   animation-fill-mode: both;
-  width: 50px;
-  height: 50px;
-  background: #fff;
+  width: 96px;
+  height: 96px;
+  background-image: url("${logoDataUri}");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
   animation: square-spin 3s 0s cubic-bezier(0.09, 0.57, 0.49, 0.9) infinite;
 }
 .app-loading-wrap {
@@ -116,5 +129,9 @@ domReady().then(appendLoading)
 window.onmessage = (ev) => {
     ev.data.payload === 'removeLoading' && removeLoading()
 }
+
+ipcRenderer.once('forks-ready', () => {
+    removeLoading()
+})
 
 setTimeout(removeLoading, 4999)
