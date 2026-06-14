@@ -56,6 +56,11 @@ class TeamsDataSocketManager {
   // state the back currently holds (possibly a clean default after a fork
   // restart). Cleared once consumed by {@link consumeCatchupIntent}.
   private lastSnapshotBeforeClose: any | null = null;
+  // Tells the socket's `close` event listener whether the close was the
+  // result of an intentional {@link close} call (true) or an unexpected
+  // network/back-end disconnect (false). Only the latter should trigger
+  // automatic reconnect; the former is by definition a request to stop.
+  private closedExplicitly = false;
 
   constructor() {
     this.connect();
@@ -158,6 +163,12 @@ class TeamsDataSocketManager {
    * method exists for defensive cleanup paths and tests.
    */
   close(): void {
+    // Mark BEFORE calling socket.close() so the listener (which may fire
+    // synchronously in some browsers, and definitely will fire on the
+    // next tick in others) sees the explicit-shutdown flag and skips the
+    // automatic reconnect path. Without this gate, intentional shutdown
+    // and unexpected disconnect were indistinguishable to the listener.
+    this.closedExplicitly = true;
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -178,6 +189,12 @@ class TeamsDataSocketManager {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    // Clear the explicit-shutdown flag whenever we deliberately start a
+    // new connection. Today this matters only as a future-proofing
+    // measure: nothing in the codebase calls connect() after close(), but
+    // exposing a clean re-init path later would otherwise inherit the
+    // stale flag and silently swallow the first unexpected disconnect.
+    this.closedExplicitly = false;
     this.setStatus("connecting");
     let socket: WebSocket;
     try {
@@ -227,7 +244,8 @@ class TeamsDataSocketManager {
     });
 
     socket.addEventListener("close", () => {
-      if (this.socket === socket) {
+      const ownedByUs = this.socket === socket;
+      if (ownedByUs) {
         this.socket = null;
       }
       // Snapshot the last good state so a reconnecting consumer can
@@ -239,7 +257,14 @@ class TeamsDataSocketManager {
         this.lastSnapshotBeforeClose = this.latestData;
       }
       this.setStatus("closed");
-      this.scheduleReconnect();
+      // Only auto-reconnect for unexpected disconnects on the current
+      // socket. Skip when this close was triggered by an explicit shutdown
+      // (close() set the flag), or when the closing socket is a stale
+      // handle we have already replaced (ownedByUs === false), which would
+      // otherwise schedule a second reconnect on top of the in-flight one.
+      if (!this.closedExplicitly && ownedByUs) {
+        this.scheduleReconnect();
+      }
     });
 
     socket.addEventListener("error", (event) => {
