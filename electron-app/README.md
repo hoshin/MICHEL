@@ -225,7 +225,7 @@ The app logs the exact path it is reading at startup. In the main process
 console (the terminal where you ran `npm start`, or the log output of the
 packaged app) you should see a line like:
 
-```
+```text
 [config] Loading configuration from: C:\Users\<you>\AppData\Roaming\michelectron\config.json
 [config] Loaded existing configuration file.
 ```
@@ -239,7 +239,7 @@ the folder name, the file name, and that the extension is really `.json`
 
 When building the Electron app on Windows you may see something like:
 
-```
+```text
 ⨯ remove ...\dist\electron-release-build\win-unpacked\d3dcompiler_47.dll: Access is denied.
 ```
 
@@ -255,7 +255,7 @@ Windows refuses to delete the DLLs they have open, and the build aborts.
 This repository ships a small pre-build script that runs automatically
 before `build:electron-app`:
 
-```
+```sh
 node ./electron-app/scripts/kill-running-app.cjs
 ```
 
@@ -284,7 +284,7 @@ installs that were built before that hardening landed.
 
 When building the Electron app on Windows, you may see an error like:
 
-```
+```text
 ERROR: Cannot create symbolic link : A required privilege is not held by the client. :
   C:\Users\<you>\AppData\Local\electron-builder\Cache\winCodeSign\<version>\darwin\10.12\lib\libcrypto.dylib
 ERROR: Cannot create symbolic link : A required privilege is not held by the client. :
