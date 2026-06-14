@@ -6,6 +6,7 @@ import "./ConfigurationCenter.css";
 import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
 import { portraits } from "./TeamBanInput.jsx";
 import { Card, Flex, Table } from "antd";
+import { useEffect, useRef, useState } from "react";
 import { useTeamsData } from "./teamsDataSocket.ts";
 import ConnectionBadge from "./components/ConnectionBadge.jsx";
 
@@ -151,8 +152,106 @@ const data = [
   },
 ];
 
+// Build the catchup payload from the snapshot we captured before the last
+// disconnect. We only forward fields that are *meaningful* (non-empty
+// strings, scores > 0, mapCount >= 1); the back applies a second layer of
+// gating (only overwrite team names/scores when at defaults), so this is a
+// belt-and-braces filter that keeps the wire payload small and the log
+// noise low.
+function buildCatchupIntent(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const intent = {};
+  const matchId = snapshot.faceIt?.matchId;
+  if (typeof matchId === "string") intent.faceItMatchId = matchId;
+  const tournamentLogo = snapshot.display?.tournamentLogo;
+  if (typeof tournamentLogo === "string")
+    intent.tournamentLogo = tournamentLogo;
+  const mapCount = snapshot.display?.mapCount;
+  if (typeof mapCount === "number" && Number.isFinite(mapCount) && mapCount >= 1)
+    intent.mapCount = mapCount;
+  const team1Name = snapshot.team1?.name;
+  const team1Score = snapshot.team1?.score;
+  if (
+    (typeof team1Name === "string" && team1Name.length > 0) ||
+    (typeof team1Score === "number" && team1Score > 0)
+  ) {
+    intent.team1 = {};
+    if (typeof team1Name === "string" && team1Name.length > 0)
+      intent.team1.name = team1Name;
+    if (typeof team1Score === "number" && team1Score > 0)
+      intent.team1.score = team1Score;
+  }
+  const team2Name = snapshot.team2?.name;
+  const team2Score = snapshot.team2?.score;
+  if (
+    (typeof team2Name === "string" && team2Name.length > 0) ||
+    (typeof team2Score === "number" && team2Score > 0)
+  ) {
+    intent.team2 = {};
+    if (typeof team2Name === "string" && team2Name.length > 0)
+      intent.team2.name = team2Name;
+    if (typeof team2Score === "number" && team2Score > 0)
+      intent.team2.score = team2Score;
+  }
+  return Object.keys(intent).length > 0 ? intent : null;
+}
+
+// How long the "Resynchronized" notice stays on screen after a successful
+// catchup. Short enough that the operator does not have to dismiss it, long
+// enough to actually catch the eye.
+const RESYNC_NOTICE_DURATION_MS = 3000;
+
 function ConfigurationCenter() {
-  const { teamsData, send } = useTeamsData();
+  const { teamsData, status, send, consumeCatchupIntent } = useTeamsData();
+  const [resyncNotice, setResyncNotice] = useState(null);
+  // Track the previous status so we can detect the transition into `open`
+  // that follows a disconnect (i.e. a reconnect) and fire a catchup. We
+  // use a ref rather than state because we don't want this transition
+  // tracking to itself trigger a re-render.
+  const previousStatusRef = useRef(status);
+
+  // The catchup effect is intentionally narrow: it only depends on `status`,
+  // because `send` and `consumeCatchupIntent` come back from `useTeamsData`
+  // as fresh closures on every render. If we included them in the deps
+  // array the effect would re-run on every render of this component, and
+  // the cleanup below (clearTimeout) would wipe the notice-clearing timer
+  // before it ever got the chance to fire. We resolve the staleness risk
+  // by reading the two functions from a ref that is updated on every
+  // render — they are stable enough for our needs (they just delegate to
+  // the singleton).
+  const teamsDataApiRef = useRef({ send, consumeCatchupIntent });
+  teamsDataApiRef.current = { send, consumeCatchupIntent };
+
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = status;
+    // A reconnect is "we just transitioned into `open`, and we were not
+    // `open` before". The very first open after page load is also caught
+    // by this — that's fine, because `consumeCatchupIntent` returns null
+    // when no pre-disconnect snapshot was captured, which is the case for
+    // the initial connection.
+    if (status !== "open" || previous === "open") return;
+    const snapshot = teamsDataApiRef.current.consumeCatchupIntent();
+    const intent = buildCatchupIntent(snapshot);
+    if (!intent) return;
+    teamsDataApiRef.current.send({ command: "catchup", value: intent });
+    setResyncNotice("Resynchronized with the back-end after reconnect.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  // Auto-dismiss the resync notice on its own clock, independently from the
+  // catchup effect. Driving the timer here means it survives unrelated
+  // re-renders (every server broadcast triggers one) — the previous version
+  // collocated the timer with the catchup effect and saw it cleared on
+  // every render, so the notice stayed up forever.
+  useEffect(() => {
+    if (!resyncNotice) return;
+    const timer = setTimeout(
+      () => setResyncNotice(null),
+      RESYNC_NOTICE_DURATION_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [resyncNotice]);
 
   const sendCommandHandler = (command) => (event) => {
     event.preventDefault();
@@ -198,6 +297,25 @@ function ConfigurationCenter() {
       <Flex justify={"center"} align={"center"}>
         <div className="app-name">M.I.C.H.E.L.</div>
         <ConnectionBadge/>
+      </Flex>
+      <Flex>
+        {resyncNotice ? (
+            <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 4,
+                  background: "rgba(70, 163, 94, 0.15)",
+                  color: "#46a35e",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
+                }}
+            >
+              {resyncNotice}
+            </div>
+        ) : null}
       </Flex>
       <Flex justify={"space-between"} align={"center"}>
         <TeamForm

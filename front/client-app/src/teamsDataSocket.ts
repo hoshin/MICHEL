@@ -44,6 +44,18 @@ class TeamsDataSocketManager {
   private dataListeners = new Set<TeamsDataListener>();
   private statusListeners = new Set<StatusListener>();
   private latestData: any = DEFAULT_STATE;
+  // True as soon as the back-end has pushed at least one snapshot during
+  // this singleton's lifetime. Consumers (notably the catchup mechanism in
+  // ConfigurationCenter) use this to tell apart "first ever open, nothing
+  // to re-assert" from "we have a meaningful last-known state we can
+  // re-assert after a reconnect".
+  private hasReceivedSnapshot = false;
+  // The last server snapshot observed BEFORE the most recent disconnect.
+  // Captured on `close` because by the time the socket reopens, the back's
+  // first broadcast will have already overwritten `latestData` with whatever
+  // state the back currently holds (possibly a clean default after a fork
+  // restart). Cleared once consumed by {@link consumeCatchupIntent}.
+  private lastSnapshotBeforeClose: any | null = null;
 
   constructor() {
     this.connect();
@@ -104,6 +116,23 @@ class TeamsDataSocketManager {
       }
     }
     this.sendQueue.push(serialized);
+  }
+
+  /**
+   * Return — and immediately clear — the snapshot captured at the moment
+   * of the last disconnect, or `null` if there is no such snapshot (first
+   * ever open, or no server message had been received before disconnect).
+   *
+   * Intended to be called once by the {@link ConfigurationCenter} when it
+   * detects a reconnect (status went `closed`/`connecting` -> `open`).
+   * The "consume" semantics prevent a second consumer (e.g. another tab
+   * mounting after the reconnect already happened) from re-asserting an
+   * already-applied intent.
+   */
+  consumeCatchupIntent(): any | null {
+    const snapshot = this.lastSnapshotBeforeClose;
+    this.lastSnapshotBeforeClose = null;
+    return snapshot;
   }
 
   private setStatus(next: SocketStatus): void {
@@ -187,6 +216,7 @@ class TeamsDataSocketManager {
         return;
       }
       this.latestData = parsed;
+      this.hasReceivedSnapshot = true;
       for (const listener of this.dataListeners) {
         try {
           listener(parsed);
@@ -199,6 +229,14 @@ class TeamsDataSocketManager {
     socket.addEventListener("close", () => {
       if (this.socket === socket) {
         this.socket = null;
+      }
+      // Snapshot the last good state so a reconnecting consumer can
+      // re-assert the operator's intent via the back-end's `catchup`
+      // command. We only do this when we have actually received a
+      // server snapshot in this session — otherwise we'd be re-asserting
+      // DEFAULT_STATE, which is never useful.
+      if (this.hasReceivedSnapshot) {
+        this.lastSnapshotBeforeClose = this.latestData;
       }
       this.setStatus("closed");
       this.scheduleReconnect();
@@ -278,5 +316,11 @@ export function useTeamsData() {
     teamsData,
     status,
     send: (payload: unknown) => teamsDataSocket.send(payload),
+    /**
+     * Pull (and clear) the snapshot captured at the moment of the last
+     * disconnect. Used by the configuration center to assemble its
+     * `catchup` payload on reconnect.
+     */
+    consumeCatchupIntent: () => teamsDataSocket.consumeCatchupIntent(),
   };
 }
