@@ -1,7 +1,8 @@
 const express = require("express")
 const path = require("path")
 const app = express()
-const port = Number(process.env.FRONT_SERVER_PORT) || 5173
+const providedPort = Number(process.env.FRONT_SERVER_PORT)
+const port = providedPort && providedPort > 0 && providedPort < 65535 ? providedPort: 5173
 
 
 console.log(path.join(__dirname + '/../dist/front/'))

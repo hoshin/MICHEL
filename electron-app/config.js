@@ -50,7 +50,11 @@ function readConfigFromDisk() {
         return {}
     }
     try {
-        return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+        const parsedConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+        if(isPlainObject(parsedConfig)) {
+            return parsedConfig
+        }
+        return {}
     } catch (err) {
         console.error(`[config] Failed to read or parse ${configPath}.`, err)
         return {}
@@ -117,4 +121,4 @@ function saveConfig(patch) {
     return deepFreeze(merged)
 }
 
-module.exports = { loadConfig, saveConfig, getConfigPath }
+module.exports = { loadConfig, saveConfig }

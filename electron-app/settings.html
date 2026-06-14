@@ -189,17 +189,17 @@
       /**
        * Reflect the dirty state of the input into the action buttons.
        *
-       * Idle (no pending edit):
-       *   - primary = "Close" (closes the modal)
-       *   - secondary = hidden
-       *
-       * Editing (pending edit, not yet saving):
-       *   - primary = "Save"
-       *   - secondary = "Discard changes" (revert to stored value)
-       *
        * Busy (save in flight):
        *   - primary = "Saving..." disabled
        *   - secondary = "Discard changes" disabled
+       *
+       * Dirty (pending edit, not yet saving):
+       *   - primary = "Save"
+       *   - secondary = "Discard changes" (revert to stored value)
+       *
+       * Idle (default):
+       *   - primary = "Close" (closes the modal)
+       *   - secondary = hidden
        *
        * This way at least one obviously-active action is always offered
        * to the user, and the "Cancel" button no longer looks like the

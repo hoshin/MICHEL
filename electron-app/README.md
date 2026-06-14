@@ -54,8 +54,8 @@ logged at startup as `[config] Loading configuration from: ...`.**
 
 ### Behavior
 
-- The configuration is read **once at startup**. Changes require an app
-  restart to take effect.
+- The configuration is read **once at startup**. Most changes require an app
+  restart to take effect, the only exception being the change of the FaceIt API key, which will selectively restart what is needed.
 - Missing keys in the user file are filled in from the defaults at load
   time, so partial files are safe.
 - If the file contains invalid JSON, an error is logged and the app falls
@@ -108,12 +108,12 @@ second, after which FACEIT-backed actions immediately use the new key.
 > **Note:** because the back-end is restarted, any series data the
 > back-end was holding in memory (current scores, map count, bans, etc.)
 > is reset to defaults. Save the FACEIT key before starting a match, not
-> during one.
+> during one (though this would be strange, but better safe than sorry).
 
 The Settings dialog is part of the desktop app itself, not the front-end.
 If you open one of the overlay pages in a regular browser (for example to
 use the overlays in OBS) there is no Settings dialog there — but you also
-do not need one, because the desktop app is what feeds the back-end with
+do not need one, because the desktop app is what feeds the embedded back-end with
 the key. Browser-only setups can still edit `config.json` directly using
 the steps in the troubleshooting section below.
 
@@ -165,6 +165,9 @@ Any keys you leave out will fall back to their built-in defaults.
 
 #### Where to place the file (Windows — explained step by step)
 
+> Note: This is only needed if you want to get fancy, understand where the file is, and mess around with the config to see what happens.
+If you only need to update your FaceIt API key, you can achieve this through the app's "Settings" menu
+
 On Windows, the app looks for the file in a folder called `michelectron`
 inside the special "Roaming" folder, which is hidden away in your user
 profile. You will often see this folder written as `%APPDATA%\michelectron`.
@@ -183,7 +186,7 @@ correctly:
    appears in the bottom-left corner of the screen.
 2. In that box, type exactly:
 
-   ```
+   ```powershell
    %APPDATA%
    ```
 

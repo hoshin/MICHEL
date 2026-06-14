@@ -69,11 +69,18 @@ function gracefullyKillChild(child, label = 'child') {
             return
         }
 
+        // Declared up front so that finish() never observes `timer` in the
+        // temporal dead zone — even if `child.once('exit', …)` fires
+        // synchronously inside `child.kill` or if the kill call throws
+        // before the setTimeout below is reached.
+        let timer = null
         let settled = false
         const finish = () => {
             if (settled) return
             settled = true
-            clearTimeout(timer)
+            if (timer !== null) {
+                clearTimeout(timer)
+            }
             resolve()
         }
 
@@ -90,7 +97,7 @@ function gracefullyKillChild(child, label = 'child') {
             return
         }
 
-        const timer = setTimeout(() => {
+        timer = setTimeout(() => {
             if (settled) return
             console.warn(
                 `[main] ${label} did not exit within ${CHILD_SHUTDOWN_TIMEOUT_MS} ms; sending SIGKILL.`
@@ -205,10 +212,11 @@ function createWindow() {
                 ],
         },
             {
-            label: 'View',
+            label: 'Debug/Tooling',
                 submenu: [
                     { role: 'reload' },
                     { role: 'forceReload' },
+                    { type: 'separator' },
                     { role: 'toggleDevTools' },
                 ],
         },
@@ -258,13 +266,82 @@ function createWindow() {
     })
 }
 
+// Bound for waitForSpawn's safety-net timer. A successful fork normally
+// emits 'spawn' within a few tens of ms; 5 s is generous headroom and short
+// enough that a broken fork does not freeze app startup or settings saves
+// indefinitely.
+const FORK_SPAWN_TIMEOUT_MS = 5000
+
+/**
+ * Resolve when a freshly-forked child reports it has actually started,
+ * reject when it fails to do so. Listens to 'spawn', 'error' and 'exit'
+ * (any of which can fire first depending on how the fork goes wrong), and
+ * adds a {@link FORK_SPAWN_TIMEOUT_MS} safety-net so a child that hangs
+ * before announcing itself can't stall startup or settings saves
+ * indefinitely. All three listeners and the timer are torn down on the
+ * first event via {@link cleanup}.
+ *
+ * Rejection lets callers (`whenReady` startup, `restartBackEnd`)
+ * distinguish "the fork is alive" from "the fork failed", instead of
+ * having to inspect `child.pid` / `child.exitCode` after the fact. Both
+ * current callers explicitly handle rejection (they log and recover
+ * gracefully) — see `app.whenReady` and `restartBackEnd` below.
+ *
+ * The fast path for an already-spawned child (non-null `child.pid`) still
+ * resolves synchronously and registers no listeners.
+ *
+ * @param {import('child_process').ChildProcess} child
+ * @returns {Promise<void>} resolves on 'spawn'; rejects on 'error',
+ *   pre-spawn 'exit', or {@link FORK_SPAWN_TIMEOUT_MS} expiry.
+ */
 function waitForSpawn(child) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         if (child.pid) {
             resolve()
             return
         }
-        child.once('spawn', resolve)
+
+        let settled = false
+        let timer = null
+        const cleanup = () => {
+            child.off('spawn', onSpawn)
+            child.off('error', onError)
+            child.off('exit', onExit)
+            if (timer !== null) {
+                clearTimeout(timer)
+            }
+        }
+        const settle = (err) => {
+            if (settled) return
+            settled = true
+            cleanup()
+            if (err) {
+                reject(err)
+            } else {
+                resolve()
+            }
+        }
+
+        const onSpawn = () => settle()
+        const onError = (err) => {
+            console.error('[main] Fork failed to spawn.', err)
+            settle(err instanceof Error ? err : new Error(String(err)))
+        }
+        const onExit = (code, signal) => {
+            const message = `Fork exited before spawning (code=${code}, signal=${signal}).`
+            console.error(`[main] ${message}`)
+            settle(new Error(message))
+        }
+
+        child.once('spawn', onSpawn)
+        child.once('error', onError)
+        child.once('exit', onExit)
+
+        timer = setTimeout(() => {
+            const message = `Fork did not spawn within ${FORK_SPAWN_TIMEOUT_MS} ms.`
+            console.warn(`[main] ${message}`)
+            settle(new Error(message))
+        }, FORK_SPAWN_TIMEOUT_MS)
     })
 }
 
@@ -296,15 +373,37 @@ function forkFrontServer(config) {
  * CHILD_SHUTDOWN_TIMEOUT_MS (1.5 s).
  */
 async function restartBackEnd() {
+    if(shuttingDown) return // exit early if this was triggered concurrently to an app shutdown (basically let the shutdown run its course)
     const previous = serverProcess
     serverProcess = null
 
     if (previous) {
         await gracefullyKillChild(previous, 'previous back-end')
     }
+    if(shuttingDown) return // exit early if this was triggered concurrently to an app shutdown (basically let the shutdown run its course)
 
     serverProcess = forkBackEnd(currentConfig)
-    await waitForSpawn(serverProcess)
+    try {
+        await waitForSpawn(serverProcess)
+    } catch (err) {
+        // The new fork never came up. Tear down whatever child handle we
+        // got, drop the stale reference, and propagate so the caller (the
+        // settings IPC handler) can surface the failure to the user
+        // instead of silently reloading the renderer against a dead
+        // back-end.
+        console.error('[main] Replacement back-end fork failed to spawn.', err)
+        await gracefullyKillChild(serverProcess, 'failed back-end')
+        serverProcess = null
+        throw err
+    }
+
+    // Prevent some race condition where a shutdown could've been initialized as this function already started
+    // spawning a serverProcess. We did not exit early enough, so we clean things up to avoid zombies
+    if (shuttingDown) {
+        await gracefullyKillChild(serverProcess, 'back-end spawned during shutdown')
+        serverProcess = null
+        return
+    }
 
     // The renderer opens its WebSocket against the back-end at module-load
     // time and has no built-in reconnect logic, so without a reload it
@@ -320,16 +419,44 @@ async function restartBackEnd() {
 
 // --- IPC: Settings window <-> main process ------------------------------
 
+/**
+ * Returns true when an incoming IPC event was emitted by the Settings
+ * window's renderer. The FACEIT key handlers below are the only path
+ * through which the key leaves (or enters) the main process, so we gate
+ * them on the caller's identity rather than trusting any renderer that
+ * happens to know the channel name.
+ *
+ * @param {Electron.IpcMainInvokeEvent} event
+ * @returns {boolean}
+ */
+function isFromSettingsWindow(event) {
+    return Boolean(
+        settingsWin &&
+        !settingsWin.isDestroyed() &&
+        event?.sender === settingsWin.webContents
+    )
+}
+
 // Settings window asks for the current FACEIT key so it can pre-fill the
-// input field.
-ipcMain.handle('settings:get-faceit-key', () => {
+// input field. Any other renderer gets an empty string.
+ipcMain.handle('settings:get-faceit-key', (event) => {
+    if (!isFromSettingsWindow(event)) {
+        console.warn('[main] Rejected settings:get-faceit-key from untrusted sender.')
+        return ''
+    }
     return currentConfig?.secrets?.faceItAPIKey ?? ''
 })
 
 // Settings window pushes a new FACEIT API key. We persist it, refresh the
 // in-memory config, then restart the back-end fork so the new key takes
-// effect without the user having to restart the whole app.
-ipcMain.handle('settings:set-faceit-key', async (_event, rawKey) => {
+// effect without the user having to restart the whole app. Requests from
+// any other renderer are rejected before touching the filesystem or the
+// back-end fork.
+ipcMain.handle('settings:set-faceit-key', async (event, rawKey) => {
+    if (!isFromSettingsWindow(event)) {
+        console.warn('[main] Rejected settings:set-faceit-key from untrusted sender.')
+        return { ok: false, error: 'unauthorized' }
+    }
     try {
         const key = typeof rawKey === 'string' ? rawKey.trim() : ''
         currentConfig = saveConfig({ secrets: { faceItAPIKey: key } })
@@ -355,10 +482,20 @@ app.whenReady().then(() => {
     serverProcess = forkBackEnd(currentConfig)
     frontServerProcess = forkFrontServer(currentConfig)
 
+    // `waitForSpawn` rejects when a fork fails to come up. If we let those
+    // rejections through to `Promise.all`, the chained `.then` below would
+    // never run AND the rejection would become an unhandled-promise
+    // rejection that crashes the app. Catching here lets startup continue:
+    // the user gets the window, the preload's own ~5 s overlay fallback
+    // dismisses the loading screen, and any subsequent WebSocket errors
+    // make the broken-fork situation visible from the renderer.
     const forksReady = Promise.all([
         waitForSpawn(serverProcess),
         waitForSpawn(frontServerProcess),
-    ])
+    ]).catch((err) => {
+        console.error('[main] One or more forks failed to spawn during startup.', err)
+        return false
+    })
 
     createWindow()
 
@@ -366,8 +503,14 @@ app.whenReady().then(() => {
         win.webContents.once('did-finish-load', resolve)
     })
 
-    Promise.all([forksReady, rendererReady]).then(() => {
-        win?.webContents.send('forks-ready')
+    Promise.all([forksReady, rendererReady]).then(([forksOk]) => {
+        // Only signal the renderer that the back-end is reachable when
+        // both forks actually spawned. Skipping the IPC on failure lets
+        // the preload's overlay timeout fall through naturally instead
+        // of falsely telling the renderer that everything is healthy.
+        if (forksOk !== false) {
+            win?.webContents.send('forks-ready')
+        }
         initialLoadCompleted = true
     })
 })
