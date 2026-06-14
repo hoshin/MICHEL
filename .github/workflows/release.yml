@@ -1,0 +1,122 @@
+name: Release build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: build:electron-app:win
+            artifact: michel-windows
+            build_streamdeck: true
+          - os: ubuntu-latest
+            script: build:electron-app:linux
+            artifact: michel-linux
+            build_streamdeck: false
+          - os: macos-latest
+            script: build:electron-app:mac
+            artifact: michel-mac
+            build_streamdeck: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install rpm tooling (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install back dependencies
+        run: npm ci
+        working-directory: back
+
+      - name: Install front dependencies
+        run: npm ci
+        working-directory: front/client-app
+
+      - name: Install electron-app dependencies
+        run: npm ci
+        working-directory: electron-app
+
+      - name: Install stream-deck plugin dependencies (Windows only)
+        if: matrix.build_streamdeck
+        run: npm ci
+        working-directory: stream-deck-plugin/michel-deck
+
+      - name: Clean previous dist
+        run: npm run build:clean
+
+      - name: Build backend
+        run: npm run build:back
+
+      - name: Build frontend
+        run: npm run build:front
+
+      - name: Build stream-deck plugin (Windows only)
+        if: matrix.build_streamdeck
+        run: npm run build:streamdeck-plugin
+
+      - name: Package electron app
+        run: npm run ${{ matrix.script }}
+        env:
+          # Skip code signing on macOS (no Apple Developer ID configured)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/electron-release-build/*.exe
+            dist/electron-release-build/*.AppImage
+            dist/electron-release-build/*.deb
+            dist/electron-release-build/*.rpm
+            dist/electron-release-build/*.zip
+            dist/electron-release-build/*.dmg
+            dist/electron-release-build/*.blockmap
+            dist/electron-release-build/latest*.yml
+          if-no-files-found: warn
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: artifacts/**/*
