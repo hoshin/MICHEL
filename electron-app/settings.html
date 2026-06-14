@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>M.I.C.H.E.L. - Settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        background: #2b2b2b;
+        color: #f0f0f0;
+        /* Hard guarantee: no scrollbars, no overflow, no resizing. The
+           BrowserWindow itself is non-resizable; we lock the page too so
+           layout drift cannot ever introduce a scroll affordance. */
+        overflow: hidden;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        padding: 20px 24px;
+        box-sizing: border-box;
+        gap: 0;
+      }
+      h1 {
+        font-size: 1.2em;
+        margin: 0 0 10px 0;
+      }
+      p.help {
+        margin: 0 0 18px 0;
+        font-size: 0.9em;
+        color: #bbbbbb;
+        line-height: 1.4;
+      }
+      label.field-label {
+        display: block;
+        font-size: 0.9em;
+        margin-bottom: 6px;
+      }
+      .input-row {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        margin-bottom: 8px;
+      }
+      input[type="password"],
+      input[type="text"] {
+        flex: 1;
+        padding: 8px 10px;
+        font-size: 1em;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #1e1e1e;
+        color: #f0f0f0;
+        font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas,
+          monospace;
+        min-width: 0; /* allow flex shrinking inside narrow modal */
+      }
+      input:focus {
+        outline: 2px solid #646cff;
+        outline-offset: -1px;
+      }
+      .reveal-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85em;
+        color: #cccccc;
+        margin-bottom: 18px;
+        user-select: none;
+        cursor: pointer;
+      }
+      /* Status line: pre-allocate vertical room for up to 3 lines so that
+         long success / error messages do not change the page layout when
+         they appear or disappear. */
+      .status {
+        font-size: 0.9em;
+        line-height: 1.35;
+        min-height: calc(0.9em * 1.35 * 3);
+        margin-bottom: 12px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+      .status.success {
+        color: #4ec070;
+      }
+      .status.error {
+        color: #ff7676;
+      }
+      .status.info {
+        color: #cccccc;
+      }
+      .button-row {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: auto;
+      }
+      button {
+        padding: 8px 18px;
+        font-size: 0.95em;
+        font-weight: 600;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #3a3a3a;
+        color: #f0f0f0;
+        cursor: pointer;
+        min-width: 110px;
+      }
+      button.primary {
+        background: #4263eb;
+        border-color: #4263eb;
+      }
+      button:hover:not(:disabled) {
+        filter: brightness(1.15);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      button.hidden {
+        display: none;
+      }
+      code {
+        background: #1e1e1e;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FACEIT API key</h1>
+    <p class="help">
+      Saved in <code>config.json</code> and forwarded to the back-end.
+      Saving here restarts the back-end and reloads the main window so the
+      new key takes effect immediately &mdash; any in-progress series data
+      is reset.
+    </p>
+
+    <label class="field-label" for="apiKey">Key</label>
+    <div class="input-row">
+      <input
+        id="apiKey"
+        type="password"
+        placeholder="Loading current value..."
+        spellcheck="false"
+        autocomplete="off"
+      />
+    </div>
+    <label class="reveal-toggle">
+      <input id="reveal" type="checkbox" />
+      Show key
+    </label>
+
+    <div id="status" class="status info"></div>
+
+    <div class="button-row">
+      <button id="cancelBtn" type="button" class="hidden">
+        Discard changes
+      </button>
+      <button id="primaryBtn" class="primary" type="button">Close</button>
+    </div>
+
+    <script>
+      const apiKeyInput = document.getElementById("apiKey");
+      const revealCheckbox = document.getElementById("reveal");
+      const primaryBtn = document.getElementById("primaryBtn");
+      const cancelBtn = document.getElementById("cancelBtn");
+      const status = document.getElementById("status");
+
+      let originalKey = "";
+      let busy = false;
+
+      function setStatus(message, kind) {
+        status.textContent = message;
+        status.className = "status " + (kind || "info");
+      }
+
+      /**
+       * Reflect the dirty state of the input into the action buttons.
+       *
+       * Busy (save in flight):
+       *   - primary = "Saving..." disabled
+       *   - secondary = "Discard changes" disabled
+       *
+       * Dirty (pending edit, not yet saving):
+       *   - primary = "Save"
+       *   - secondary = "Discard changes" (revert to stored value)
+       *
+       * Idle (default):
+       *   - primary = "Close" (closes the modal)
+       *   - secondary = hidden
+       *
+       * This way at least one obviously-active action is always offered
+       * to the user, and the "Cancel" button no longer looks like the
+       * only thing that works while everything else sits greyed-out.
+       */
+      function refreshButtons() {
+        const dirty = apiKeyInput.value !== originalKey;
+        if (busy) {
+          primaryBtn.textContent = "Saving...";
+          primaryBtn.disabled = true;
+          cancelBtn.classList.remove("hidden");
+          cancelBtn.disabled = true;
+          return;
+        }
+        if (dirty) {
+          primaryBtn.textContent = "Save";
+          primaryBtn.disabled = false;
+          cancelBtn.classList.remove("hidden");
+          cancelBtn.disabled = false;
+        } else {
+          primaryBtn.textContent = "Close";
+          primaryBtn.disabled = false;
+          cancelBtn.classList.add("hidden");
+          cancelBtn.disabled = false;
+        }
+      }
+
+      function discardChanges() {
+        apiKeyInput.value = originalKey;
+        setStatus("", "info");
+        refreshButtons();
+        apiKeyInput.focus();
+      }
+
+      async function save() {
+        // Snapshot AND normalize the input synchronously, before any await.
+        // - Snapshot: reading apiKeyInput.value after the await would capture
+        //   whatever the user typed during the (potentially multi-second)
+        //   back-end restart, so the value we sent to main and the value we
+        //   record as the new baseline could diverge.
+        // - Normalize: main.js trims the key server-side, so if we don't trim
+        //   here too, originalKey would be set to the untrimmed text and the
+        //   field would immediately look "dirty" right after a successful save.
+        const normalizedKey = apiKeyInput.value.trim();
+        busy = true;
+        refreshButtons();
+        setStatus("Saving and restarting back-end...", "info");
+        // The main window will be reloaded once the new back-end is up;
+        // we keep the Settings window open so the user can confirm the
+        // operation succeeded.
+        try {
+          const result = await window.michelSettings.saveFaceItKey(
+            normalizedKey,
+          );
+          if (result && result.ok) {
+            // Assign only on success: a failed save means the on-disk key is
+            // still the previous one, and the baseline must keep reflecting
+            // that so the user can retry or discard.
+            originalKey = normalizedKey;
+            setStatus(
+              "Saved. The back-end was reloaded with the new key and the main window has refreshed its connection.",
+              "success",
+            );
+          } else {
+            setStatus(
+              "Failed to save: " +
+                (result && result.error ? result.error : "unknown error"),
+              "error",
+            );
+          }
+        } catch (err) {
+          setStatus(
+            "Failed to save: " + (err && err.message ? err.message : err),
+            "error",
+          );
+        } finally {
+          busy = false;
+          refreshButtons();
+        }
+      }
+
+      revealCheckbox.addEventListener("change", () => {
+        apiKeyInput.type = revealCheckbox.checked ? "text" : "password";
+      });
+
+      apiKeyInput.addEventListener("input", refreshButtons);
+
+      primaryBtn.addEventListener("click", () => {
+        if (busy) return;
+        const dirty = apiKeyInput.value !== originalKey;
+        if (dirty) {
+          save();
+        } else {
+          window.michelSettings.close();
+        }
+      });
+
+      cancelBtn.addEventListener("click", () => {
+        if (busy) return;
+        discardChanges();
+      });
+
+      // Load the current value as soon as the bridge is available.
+      (async function init() {
+        try {
+          if (!window.michelSettings) {
+            setStatus(
+              "Settings bridge unavailable. Please reopen this window.",
+              "error",
+            );
+            return;
+          }
+          const current = await window.michelSettings.getCurrentFaceItKey();
+          originalKey = typeof current === "string" ? current : "";
+          apiKeyInput.value = originalKey;
+          apiKeyInput.placeholder = originalKey
+            ? "(stored \u2014 edit to replace)"
+            : "Paste your FACEIT API key";
+          setStatus("", "info");
+          refreshButtons();
+          apiKeyInput.focus();
+        } catch (err) {
+          setStatus(
+            "Could not read current configuration: " +
+              (err && err.message ? err.message : err),
+            "error",
+          );
+        }
+      })();
+    </script>
+  </body>
+</html>

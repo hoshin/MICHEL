@@ -13,6 +13,7 @@
     "build:back": "cd back && npm run build",
     "build:front": "cd front/client-app && npm run build",
     "build:streamdeck-plugin": "cd stream-deck-plugin/michel-deck && npm run build-and-package:win",
+    "prebuild:electron-app": "node ./electron-app/scripts/kill-running-app.cjs",
     "build:electron-app": "npx electron-builder",
     "build:all": "npm run build:clean && npm run build:back && npm run build:front && npm run build:streamdeck-plugin && npm run build:electron-app",
     "start": "npm run build:back && npm run build:front && concurrently \"npm run start:back:build\" \"npm run start:front\"",
