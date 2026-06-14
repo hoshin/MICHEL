@@ -302,6 +302,20 @@ export class MichelBackService {
     }
 
     /**
+     * Coerce an external countdown input to a safe, non-negative integer
+     * number of seconds. Rejects non-finite values (NaN, Infinity, -Infinity)
+     * by falling back to 0; without this guard, `Number(value)` could let
+     * Infinity through, `Math.floor(Infinity)` stays Infinity, and the
+     * resulting setInterval would run forever because `tickCountdown`'s
+     * `Infinity - 1 === Infinity` never reaches the zero stop condition.
+     */
+    private normalizeCountdownSeconds = (value: unknown): number => {
+        const n = Number(value)
+        if (!Number.isFinite(n)) return 0
+        return Math.max(0, Math.floor(n))
+    }
+
+    /**
      * Stop the running countdown interval, if any, and clear the handle.
      * Idempotent: safe to call when no timer is running.
      */
@@ -318,7 +332,7 @@ export class MichelBackService {
      */
     countdownSet = (res: Response, value: number) => {
         this.clearCountdownTimer()
-        this.seriesData.display.countdown = Math.max(0, Math.floor(Number(value) || 0))
+        this.seriesData.display.countdown = this.normalizeCountdownSeconds(value)
         this.seriesData.display.countdownRunning = false
         if (this.debug) {
             this.logger.info(`countdownSet to ${this.seriesData.display.countdown}`)
@@ -333,7 +347,7 @@ export class MichelBackService {
      */
     countdownStart = (res: Response, value: number) => {
         this.clearCountdownTimer()
-        this.seriesData.display.countdown = Math.max(0, Math.floor(Number(value) || 0))
+        this.seriesData.display.countdown = this.normalizeCountdownSeconds(value)
         this.seriesData.display.countdownRunning = this.seriesData.display.countdown > 0
         if (this.debug) {
             this.logger.info(`countdownStart from ${this.seriesData.display.countdown}`)
@@ -392,7 +406,7 @@ export class MichelBackService {
      */
     countdownReset = (res: Response, value?: number) => {
         this.clearCountdownTimer()
-        this.seriesData.display.countdown = Math.max(0, Math.floor(Number(value) || 0))
+        this.seriesData.display.countdown = this.normalizeCountdownSeconds(value)
         this.seriesData.display.countdownRunning = false
         if (this.debug) {
             this.logger.info(`countdownReset to ${this.seriesData.display.countdown}`)
