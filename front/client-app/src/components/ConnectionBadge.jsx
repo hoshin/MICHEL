@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTeamsData } from "../teamsDataSocket.ts";
+import {CheckCircleOutlined, DisconnectOutlined, LoginOutlined} from "@ant-design/icons";
 
 /**
  * Tiny diagnostic badge that pops a small label in a corner of the screen
@@ -21,7 +22,7 @@ import { useTeamsData } from "../teamsDataSocket.ts";
  * whether an OBS source is "blank because the socket is dead" vs. "blank
  * because the page itself has a problem".
  */
-function ConnectionBadge({ corner = "bottom-right", graceMs = 2000 }) {
+function ConnectionBadge({ corner = "top-left", graceMs = 2000 }) {
   const { status } = useTeamsData();
   const [show, setShow] = useState(false);
 
@@ -34,14 +35,19 @@ function ConnectionBadge({ corner = "bottom-right", graceMs = 2000 }) {
     return () => clearTimeout(timer);
   }, [status, graceMs]);
 
-  if (!show) return null;
+  // if (!show) return null;
 
   const positionStyles = {
-    "bottom-right": { right: 12, bottom: 12 },
-    "bottom-left": { left: 12, bottom: 12 },
-    "top-right": { right: 12, top: 12 },
-    "top-left": { left: 12, top: 12 },
+    "bottom-right": { right: 16, bottom: 12 },
+    "bottom-left": { left: 16, bottom: 12 },
+    "top-right": { right: 16, top: 12 },
+    "top-left": { left: 16, top: 12 },
   };
+  const iconByStatus = {
+      connecting: <LoginOutlined />,
+      closed: <DisconnectOutlined />,
+      open: <CheckCircleOutlined />
+  }
 
   const colorByStatus = {
     connecting: "#dba300",
@@ -56,7 +62,7 @@ function ConnectionBadge({ corner = "bottom-right", graceMs = 2000 }) {
         zIndex: 9999,
         padding: "4px 10px",
         borderRadius: 4,
-        background: "rgba(0, 0, 0, 0.7)",
+        background: "rgba(0, 0, 0, 0.65)",
         color: colorByStatus[status] ?? "#ffffff",
         fontFamily:
           "ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace",
@@ -67,7 +73,7 @@ function ConnectionBadge({ corner = "bottom-right", graceMs = 2000 }) {
         ...positionStyles[corner],
       }}
     >
-      WS: {status}
+      Backend connection: { iconByStatus[status] }
     </div>
   );
 }

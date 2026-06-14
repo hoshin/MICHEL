@@ -7,6 +7,7 @@ import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
 import { portraits } from "./TeamBanInput.jsx";
 import { Card, Flex, Table } from "antd";
 import { useTeamsData } from "./teamsDataSocket.ts";
+import ConnectionBadge from "./components/ConnectionBadge.jsx";
 
 function copyURI(evt) {
   evt.preventDefault();
@@ -196,6 +197,7 @@ function ConfigurationCenter() {
     <Flex vertical>
       <Flex justify={"center"} align={"center"}>
         <div className="app-name">M.I.C.H.E.L.</div>
+        <ConnectionBadge/>
       </Flex>
       <Flex justify={"space-between"} align={"center"}>
         <TeamForm
