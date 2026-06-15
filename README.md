@@ -210,6 +210,8 @@ In short:
 
 Why split it up? Mostly because not everyone has the same taste as I do when it comes to interfaces for a stream. Building dedicated front-ends or remotes is much easier when the back is a stable, language-agnostic HTTP+WS service.
 
+For more details on how everything is wired up, including HTTP / WebSockets flow diagrams, see [Architecture.md](./Architecture.md)
+
 ## Configuration files
 
 Two JSON config files matter. **Neither is committed** — `back/config.json` is explicitly git-ignored and `electron-app/config.json` is expected to be a local-only file too. Use the shapes below as templates.
