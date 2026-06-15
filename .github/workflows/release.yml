@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -100,6 +104,7 @@ jobs:
             dist/electron-release-build/*.dmg
             dist/electron-release-build/*.blockmap
             dist/electron-release-build/latest*.yml
+            dist/streamdeck-plugin/com.hoshin-casts.michel-deck.streamDeckPlugin
           if-no-files-found: warn
 
   release:
