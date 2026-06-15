@@ -16,6 +16,7 @@
 - [General architecture](#general-architecture)
 - [Configuration files](#configuration-files)
 - [Scripts cheat sheet](#scripts-cheat-sheet)
+  - [Releasing](#releasing)
 - [Building the Electron app](#building-the-electron-app)
 - [Stream Deck plugin](#stream-deck-plugin)
 - [Known issues & caveats](#known-issues--caveats)
@@ -303,6 +304,70 @@ All scripts below are run from the **repo root** unless noted.
 | `npm test` (root) | Currently a no-op (`exit 1`). Tests live per-workspace. |
 | `npm test` in `back/` | Runs Jest unit tests against the backend. |
 
+### Releasing
+
+Cutting a release is a two-step flow: **start** a release (bump the version on a dedicated branch) and **finish** it (tag the merged commit and trigger the CI build).
+
+| Script | What it does |
+|---|---|
+| `npm run release:start -- <major\|minor\|patch>` | Creates `release/v<x.y.z>` off the latest `origin/main`, bumps the root `package.json` according to semver, commits as `Release v<x.y.z>`, and pushes the branch to `origin`. |
+| `npm run release:finish` | Reads the version from `origin/main:package.json`, creates an annotated `v<x.y.z>` tag on that commit, and pushes the tag to `origin` — which fires the `Release build` GitHub Actions workflow. |
+
+Both scripts live in `scripts/` and have no runtime dependencies beyond `git` and `npm` on PATH.
+
+#### `npm run release:start -- <type>`
+
+The `--` is required so npm forwards the bump type to the script (e.g. `npm run release:start -- patch`).
+
+What it does, in order:
+
+1. Validates the argument (must be exactly `major`, `minor`, or `patch`).
+2. Refuses to run with a dirty working tree.
+3. `git fetch origin main`.
+4. Reads the version from `origin/main:package.json` (the canonical baseline — not your local branch) and computes the next semver.
+5. Aborts if `release/v<x.y.z>` already exists locally or on `origin`.
+6. `git checkout -b release/v<x.y.z> origin/main`.
+7. Bumps the version with `npm version <type> --no-git-tag-version` (rewrites `package.json` and `package-lock.json` if present, no tag, no commit).
+8. Commits the bump as `Release v<x.y.z>`.
+9. Pushes the branch with upstream tracking (`git push -u origin release/v<x.y.z>`).
+
+It deliberately does **not** create a git tag — tagging is what triggers the release workflow, and you'll want that to happen against the *merged* commit on `main`, not against the bump commit on the release branch.
+
+After the script finishes, the normal flow is:
+
+1. Open a PR from `release/v<x.y.z>` into `main`, review, and merge it.
+2. Run `npm run release:finish` (next section).
+
+#### `npm run release:finish`
+
+Takes no arguments. The version it tags comes from `origin/main:package.json`, so it's always in sync with what was actually merged.
+
+What it does, in order:
+
+1. Refuses to run with a dirty working tree.
+2. `git fetch --tags origin main`.
+3. Reads the version from `origin/main:package.json` and validates it's plain `MAJOR.MINOR.PATCH`.
+4. Resolves `origin/main` to a specific commit SHA (so it tags an explicit commit, not a symbolic ref that could move).
+5. Aborts if `v<x.y.z>` already exists locally or on `origin`.
+6. Creates an annotated tag: `git tag -a v<x.y.z> -m "Release v<x.y.z>" <sha>`.
+7. Pushes only the tag: `git push origin v<x.y.z>`.
+
+That push matches the `tags: v*` trigger in `.github/workflows/release.yml`, which kicks off the cross-platform build matrix and (on success) creates the GitHub Release with all installers attached.
+
+#### Summary flow
+
+```
+# 1. From any branch, on a clean tree:
+npm run release:start -- patch        # e.g. 1.2.3 -> 1.2.4 on release/v1.2.4
+
+# 2. Open the PR (release/v1.2.4 -> main) on GitHub, review, merge.
+
+# 3. Back on your machine, on a clean tree:
+npm run release:finish                # tags v1.2.4 on origin/main, pushes it.
+
+# 4. GitHub Actions builds Windows/Linux/macOS artifacts and publishes a Release.
+```
+
 ## Building the Electron app
 
 The "All in one" executable (`michelectron`) is packaged using [`electron-builder`](https://www.electron.build/). Its configuration lives in the `build` block of the root `package.json`, alongside the scripts described below.
@@ -370,13 +435,14 @@ After all three matrix jobs succeed, and **only if the trigger was a `v*` tag**,
 2. Uses [`softprops/action-gh-release@v2`](https://github.com/softprops/action-gh-release) to create a public GitHub Release named after the tag, with auto-generated release notes, and attaches every artifact (Win installer, Linux AppImage/deb/rpm, Mac zips for both x64 and arm64) to it.
 
 #### Cutting a new release in practice
+Use the helper scripts documented in [Releasing](#releasing):
+
 ```bash
-# Bump the version in package.json first
-git add package.json
-git commit -m "release: v1.2.0"
-git tag v1.2.0
-git push origin main --tags
+npm run release:start -- patch   # or `minor` / `major`
+# review & merge the auto-created release/v<x.y.z> PR into main, then:
+npm run release:finish
 ```
+
 Then watch the workflow in the GitHub Actions tab; once it finishes, the Release will be available with all platform binaries attached.
 
 ## Stream Deck plugin

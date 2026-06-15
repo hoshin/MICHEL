@@ -25,6 +25,8 @@
     "start:back": "cd ./back && npm run start",
     "start:back:build": "node ./dist/back/index.js",
     "start:front": "cd ./front/client-app && npm run dev",
+    "release:start": "node ./scripts/release-start.cjs",
+    "release:finish": "node ./scripts/release-finish.cjs",
     "prepare": "husky"
   },
   "build": {
