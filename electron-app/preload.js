@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const logoPath = path.join(__dirname, 'images', 'logo_56.png')
+const logoPath = path.join(__dirname, 'images', 'logo_256.png')
 let logoDataUri = ''
 try {
     logoDataUri = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`

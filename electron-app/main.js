@@ -185,7 +185,7 @@ function openSettingsWindow() {
 
 function createWindow() {
     win = new BrowserWindow({
-        icon: path.join(__dirname, './images/logo_56.png'), //
+        icon: path.join(__dirname, './images/logo_256.png'),
         webPreferences: {
             preload: path.join(__dirname, './preload.js'),
             nodeIntegration: false,
