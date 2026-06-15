@@ -4,7 +4,10 @@
   "description": "My tools to help me run a solo production when casting (tailored with the Overwatch game in mind)",
   "main": "electron-app/main.js",
   "type": "module",
-  "author": "Martin 'Hoshin' Bahier",
+  "author": {
+    "name": "Martin 'Hoshin' Bahier",
+    "email": "hoshin-casts@proton.me"
+  },
   "license": "CC-BY-NC",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
