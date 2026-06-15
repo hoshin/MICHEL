@@ -449,11 +449,7 @@ Then watch the workflow in the GitHub Actions tab; once it finishes, the Release
 
 ### Install (no-build path)
 
-A pre-packaged plugin file is committed at:
-
-```
-stream-deck-plugin/com.hoshin-casts.michel-deck_0.1.0.streamDeckPlugin
-```
+A pre-packaged plugin file will be made available in new releases artifacts, alongside the desktop app
 
 With the Elgato Stream Deck software running, double-click the file — it'll prompt to install/replace the plugin. The actions then become available in the plugin sidebar.
 
