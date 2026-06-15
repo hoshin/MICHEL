@@ -1,6 +1,6 @@
 {
   "name": "michel-casting-tools",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "My tools to help me run a solo production when casting (tailored with the Overwatch game in mind)",
   "main": "electron-app/main.js",
   "type": "module",
