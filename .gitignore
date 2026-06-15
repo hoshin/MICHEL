@@ -1,19 +1,25 @@
+# General build / dev artifacts
 node_modules
 .idea
 .vscode
 coverage
-*dist
-com.*.streamDeckPlugin
-stream-deck-plugin/com.hoshin-casts.michel-deck.streamDeckPlugin/bin
-back/config.json*
-electron-app/config.json
+/dist/
 *.log
-
-stream-deck-plugin/**/*.js
-stream-deck-plugin/**/*.map
-
 *.xcf
+/.ignore/
 
-front/client-app/src/assets/custom
+# back-specific
+/back/config.json*
 
-.ignore
+# front-specific
+/front/client-app/src/assets/custom
+
+# electron-specific
+/electron-app/config.json
+
+# streamdeck-specific
+*.streamDeckPlugin
+/stream-deck-plugin/**/*.js
+/stream-deck-plugin/**/*.map
+*.sdPlugin/bin
+*.sdPlugin/logs
