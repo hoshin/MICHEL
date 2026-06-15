@@ -1,0 +1,126 @@
+name: Release build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: build:electron-app:win
+            artifact: michel-windows
+            build_streamdeck: true
+          - os: ubuntu-latest
+            script: build:electron-app:linux
+            artifact: michel-linux
+            build_streamdeck: false
+          - os: macos-latest
+            script: build:electron-app:mac
+            artifact: michel-mac
+            build_streamdeck: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install rpm tooling (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install back dependencies
+        run: npm ci
+        working-directory: back
+
+      - name: Install front dependencies
+        run: npm ci
+        working-directory: front/client-app
+
+      - name: Install electron-app dependencies
+        run: npm ci
+        working-directory: electron-app
+
+      - name: Install stream-deck plugin dependencies (Windows only)
+        if: matrix.build_streamdeck
+        run: npm ci
+        working-directory: stream-deck-plugin/michel-deck
+
+      - name: Clean previous dist
+        run: npm run build:clean
+
+      - name: Build backend
+        run: npm run build:back
+
+      - name: Build frontend
+        run: npm run build:front
+
+      - name: Build stream-deck plugin (Windows only)
+        if: matrix.build_streamdeck
+        run: npm run build:streamdeck-plugin
+
+      - name: Package electron app
+        run: npm run ${{ matrix.script }}
+        env:
+          # Skip code signing on macOS (no Apple Developer ID configured)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/electron-release-build/*.exe
+            dist/electron-release-build/*.AppImage
+            dist/electron-release-build/*.deb
+            dist/electron-release-build/*.rpm
+            dist/electron-release-build/*.zip
+            dist/electron-release-build/*.dmg
+            dist/electron-release-build/*.blockmap
+            dist/electron-release-build/latest*.yml
+          if-no-files-found: warn
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: artifacts/**/*
