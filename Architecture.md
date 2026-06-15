@@ -145,20 +145,22 @@ Anything else falls through to `michelBackService.home(null)` (`back/handlers/ho
 
 ### Configuration sources
 
-| File | Consumer | Purpose |
-|---|---|---|
+| File | Consumer | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|---|---|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `<userData>/config.json` (e.g. `%APPDATA%\michelectron\config.json`) | Electron main process (`electron-app/config.js`) | Persistent settings. Today only `secrets.faceItAPIKey` (forwarded to the back as `FACEIT_KEY` env, `electron-app/main.js`) and `ports.frontServer` (forwarded as `FRONT_SERVER_PORT`, `electron-app/main.js`) are actually wired. Other fields (`ports.backServer`, `debug`, `preferences.openDevTools`, `overlays`) are declared but **not read by any consumer in the current code** — noted in `electron-app/README.md`. |
-| `back/config.json` | Backend (`back/handlers/home.ts`) | Initial `seriesData` snapshot when the back starts. Read via `fs.readFileSync('./back/config.json')`, so the working directory matters. If the file is missing the back falls back to `DEFAULT_SERIES_DATA` (`back/handlers/home.ts`). |
-| `back/config.template.json` | Documentation only. Not read at runtime. | — |
-| `front/client-app/src/config.js` | Front bundle | Compile-time constants including `WEBSOCKET_URL`. |
-| Root `package.json` `build` block | `electron-builder` (`package.json:32`–`package.json:67`) | Native installer configuration. |
-| Stream Deck `manifest.json` | Stream Deck host | Plugin metadata; `CodePath: bin/plugin.js`. |
+| `back/config.json` | Backend (`back/handlers/home.ts`) | Initial `seriesData` snapshot when the back starts. Read via `fs.readFileSync('./back/config.json')`. If the file is missing the back falls back to `DEFAULT_SERIES_DATA` (`back/handlers/home.ts`).                                                                                                                                                                |
+| `back/config.template.json` | Documentation only. Not read at runtime. | —                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `front/client-app/src/config.js` | Front bundle | Compile-time constants including `WEBSOCKET_URL`.                                                                                                                                                                                                                                                                                                                                                                        |
+| Root `package.json` `build` block | `electron-builder` (`package.json:32`–`package.json:67`) | Native installer configuration.                                                                                                                                                                                                                                                                                                                                                                                          |
+| Stream Deck `manifest.json` | Stream Deck host | Plugin metadata; `CodePath: bin/plugin.js`.                                                                                                                                                                                                                                                                                                                                                                              |
+
+> [Warning] About `back/config.json` : The way it is currently read means the working directory from which we start the back-end matters. I might come around and fix it at some point, but it is not very high on the list at the moment.
 
 Env var bridges (Electron → forks): `FACEIT_KEY` (`electron-app/main.js` → `back/handlers/home.ts`), `FRONT_SERVER_PORT` (`electron-app/main.js` → `electron-app/frontServer.js`).
 
 ### Cross-component glue and assumptions
 
-- **No shared types package.** The `SeriesData` shape lives in `back/handlers/home.ts`. The front re-declares a parallel `DEFAULT_STATE` literal at `front/client-app/src/config.js:`. They drift independently.
+- **No shared types package.** The `SeriesData` shape lives in `back/handlers/home.ts`. The front re-declares a parallel `DEFAULT_STATE` literal at `front/client-app/src/config.js`. They drift independently.
 - **No shared command vocabulary.** The set of `command` strings is defined implicitly by the switch in `back/handlers/home.ts`. The front uses these strings directly inside `ConfigurationCenter.jsx`. The Stream Deck plugin avoids the issue entirely by using HTTP routes (which carry the verb in their path).
 - **Coordination is implicit.** Electron does not wait for the back's port to be listening before reloading the renderer — it only waits for the child process to spawn (`electron-app/main.js`). The front's auto-reconnect logic (`front/client-app/src/teamsDataSocket.ts`) absorbs the race.
 - **The `catchup` command** is sent by the front after a reconnect to re-assert any local UI state that the back might not know about (`front/client-app/src/ConfigurationCenter.jsx`, handler at `back/handlers/home.ts`).
@@ -244,12 +246,22 @@ sequenceDiagram
     WS-->>TM: open
     TM->>WS: send {"init": 1}
     WS-->>TM: snapshot
-    CC->>TM: send({command:"catchup", …captured intent})
+    CC->>TM: send({command:"catchup", …catchup payload})
     TM->>WS: JSON message
     WS->>SVC: catchup handler reasserts<br/>UI-owned fields
     SVC-->>WS: sendUpdatedStateToCaller
     WS-->>TM: snapshot
 ```
+
+Note: 
+
+`catchup payload` references the contents of the actual payload used by a client app to send "catchup data" to the back in the event it were to go offline for some reason. This typically includes : 
+- FaceIt match ID
+- Teams names, logos, scores
+- Map number
+- Tournament logo
+
+All as seen in `ConfigurationCenter`'s `buildCatchupIntent` function
 
 Key references:
 - Front singleton manager + handlers: `front/client-app/src/teamsDataSocket.ts`.
