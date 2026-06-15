@@ -181,7 +181,7 @@ function main() {
         '  remote: pushed to origin\n' +
         '\n' +
         'The `Release build` workflow should now be running on GitHub Actions.\n' +
-        'Track it at: https://github.com/hoshin/MICHEL/actions\n'
+        'Track it at the Actions tab of your repository on GitHub.\n'
     )
 }
 
