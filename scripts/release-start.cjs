@@ -213,7 +213,7 @@ function main() {
         filesToStage.push('package-lock.json')
     }
     run('git', ['add', ...filesToStage])
-    run('git', ['commit', '-m', `Release v${nextVersion}`])
+    run('git', ['commit', '-m', `"Release v${nextVersion}"`])
 
     // 9. Push with upstream tracking.
     info(`Pushing ${branchName} to origin…`)
