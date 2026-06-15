@@ -108,7 +108,7 @@ Run these from the repository root.
 | `npm run build:clean` | Removes `dist/` and `release-builds/`. | — |
 | `npm run build:back` | Compiles `michel-back` into `dist/back/`. | — |
 | `npm run build:front` | Builds `michel-client-app` into `dist/front/`. | — |
-| `npm run build:streamdeck-plugin` | Packages the Stream Deck plugin (Windows only — uses `build-and-package:win`). | `stream-deck-plugin/.../com.hoshin-casts.michel-deck.streamDeckPlugin` |
+| `npm run build:streamdeck-plugin` | Packages the Stream Deck plugin (Windows only — uses `build-and-package:win`). | `dist/streamdeck-plugin/com.hoshin-casts.michel-deck.streamDeckPlugin` |
 | `npm run build:electron-app` | Runs `electron-builder` for the host OS using its default target list. | Native installer(s) for the current OS. |
 | `npm run build:electron-app:win` | Builds Windows x64 only. | `MICHELectron Setup <version>.exe` (NSIS installer) + `.blockmap` + `latest.yml`. |
 | `npm run build:electron-app:linux` | Builds Linux x64 only. | `MICHELectron-<version>.AppImage`, `michelectron_<version>_amd64.deb`, `michelectron-<version>.x86_64.rpm`. |
