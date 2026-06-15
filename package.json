@@ -1,6 +1,6 @@
 {
   "name": "michel-casting-tools",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "My tools to help me run a solo production when casting (tailored with the Overwatch game in mind)",
   "main": "electron-app/main.js",
   "type": "module",
@@ -42,23 +42,53 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "electron-app/images/logo_56.png"
     },
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64"] },
-        { "target": "deb",      "arch": ["x64"] },
-        { "target": "rpm",      "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "category": "AudioVideo",
       "icon": "electron-app/images/logo_56.png"
     },
     "mac": {
       "target": [
-        { "target": "zip", "arch": ["x64"] },
-        { "target": "zip", "arch": ["arm64"] }
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.video",
       "icon": "electron-app/images/logo_56.png",
