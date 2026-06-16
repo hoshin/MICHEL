@@ -19,17 +19,17 @@ const filenameToSlug = (path) =>
 // characters that can't be derived from the filename. Add entries here when
 // a new portrait needs an alias (e.g. "D.Va", "Soldier: 76", ...).
 const displayNameAliases = {
-  "JetPack Cat": "jetpackCat",
 };
 
 export const portraits = (() => {
   const result = {};
-  for (const [displayName, key] of Object.entries(displayNameAliases)) {
-    if (result[key]) result[displayName] = result[key];
-  }
 
   for (const [path, url] of Object.entries(portraitModules)) {
     result[kebabToCamel(filenameToSlug(path))] = url;
+  }
+
+  for (const [displayName, key] of Object.entries(displayNameAliases)) {
+    if (result[key]) result[displayName] = result[key];
   }
 
   // Preserve legacy behaviour: `none` falls back to ana.
