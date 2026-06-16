@@ -33,6 +33,7 @@ import ramatra from "./assets/portraits/ramatra.png";
 import reaper from "./assets/portraits/reaper.png";
 import reinhardt from "./assets/portraits/reinhardt.png";
 import roadhog from "./assets/portraits/roadhog.png";
+import shion from "./assets/portraits/shion.png";
 import sierra from "./assets/portraits/sierra.png";
 import sigma from "./assets/portraits/sigma.png";
 import sojourn from "./assets/portraits/sojourn.png";
@@ -89,6 +90,7 @@ export const portraits = {
   reaper,
   reinhardt,
   roadhog,
+  shion,
   sierra,
   sigma,
   sojourn,
