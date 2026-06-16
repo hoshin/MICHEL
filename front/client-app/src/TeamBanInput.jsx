@@ -1,128 +1,72 @@
-import ana from "./assets/portraits/ana.png";
-import anran from "./assets/portraits/anran.png";
-import ashe from "./assets/portraits/ashe.png";
-import baptiste from "./assets/portraits/baptiste.png";
-import bastion from "./assets/portraits/bastion.png";
-import brigitte from "./assets/portraits/brigitte.png";
-import cassidy from "./assets/portraits/cassidy.png";
-import dva from "./assets/portraits/d-va.png";
-import domina from "./assets/portraits/domina.png";
-import doomfist from "./assets/portraits/doomfist.png";
-import echo from "./assets/portraits/echo.png";
-import emre from "./assets/portraits/emre.png";
-import freja from "./assets/portraits/freja.png";
-import genji from "./assets/portraits/genji.png";
-import hanzo from "./assets/portraits/hanzo.png";
-import hazard from "./assets/portraits/hazard.png";
-import illari from "./assets/portraits/illari.png";
-import jetpackCat from "./assets/portraits/jetpack-cat.png";
-import junkerQueen from "./assets/portraits/junker-queen.png";
-import junkrat from "./assets/portraits/junkrat.png";
-import juno from "./assets/portraits/juno.png";
-import kiriko from "./assets/portraits/kiriko.png";
-import lifeweaver from "./assets/portraits/lifeweaver.png";
-import lucio from "./assets/portraits/lucio.png";
-import mauga from "./assets/portraits/mauga.png";
-import mei from "./assets/portraits/mei.png";
-import mercy from "./assets/portraits/mercy.png";
-import mizuki from "./assets/portraits/mizuki.png";
-import moira from "./assets/portraits/moira.png";
-import orisa from "./assets/portraits/orisa.png";
-import pharah from "./assets/portraits/pharah.png";
-import ramatra from "./assets/portraits/ramatra.png";
-import reaper from "./assets/portraits/reaper.png";
-import reinhardt from "./assets/portraits/reinhardt.png";
-import roadhog from "./assets/portraits/roadhog.png";
-import sierra from "./assets/portraits/sierra.png";
-import sigma from "./assets/portraits/sigma.png";
-import sojourn from "./assets/portraits/sojourn.png";
-import soldier76 from "./assets/portraits/soldier-76.png";
-import sombra from "./assets/portraits/sombra.png";
-import symmetra from "./assets/portraits/symmetra.png";
-import torbjorn from "./assets/portraits/torbjorn.png";
-import tracer from "./assets/portraits/tracer.png";
-import vendetta from "./assets/portraits/vendetta.png";
-import venture from "./assets/portraits/venture.png";
-import widowmaker from "./assets/portraits/widowmaker.png";
-import winston from "./assets/portraits/winston.png";
-import wreckingBall from "./assets/portraits/wrecking-ball.png";
-import wuyang from "./assets/portraits/wuyang.png";
-import zarya from "./assets/portraits/zarya.png";
-import zenyatta from "./assets/portraits/zenyatta.png";
-import none from "./assets/portraits/ana.png";
 import { Select } from "antd";
 
-export const portraits = {
-  ana,
-  anran,
-  ashe,
-  baptiste,
-  bastion,
-  brigitte,
-  cassidy,
-  dva,
-  domina,
-  doomfist,
-  echo,
-  emre,
-  freja,
-  genji,
-  hanzo,
-  hazard,
-  illari,
-  jetpackCat,
-  "JetPack Cat": jetpackCat,
-  junkerQueen,
-  junkrat,
-  juno,
-  kiriko,
-  lifeweaver,
-  lucio,
-  mauga,
-  mei,
-  mercy,
-  mizuki,
-  moira,
-  orisa,
-  pharah,
-  ramatra,
-  reaper,
-  reinhardt,
-  roadhog,
-  sierra,
-  sigma,
-  sojourn,
-  soldier76,
-  sombra,
-  symmetra,
-  torbjorn,
-  tracer,
-  vendetta,
-  venture,
-  widowmaker,
-  winston,
-  wreckingBall,
-  wuyang,
-  zarya,
-  zenyatta,
-  none,
+// Vite picks up every PNG at build time. `eager: true` returns the resolved
+// URL strings directly, matching the previous static `import x from "..."`
+// behaviour (no runtime fetch, same hashed asset URLs).
+const portraitModules = import.meta.glob("./assets/portraits/*.png", {
+  eager: true,
+  import: "default",
+});
+
+// "jetpack-cat" -> "jetpackCat", "soldier-76" -> "soldier76", "d-va" -> "dva"
+const kebabToCamel = (slug) =>
+  slug.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+
+const filenameToSlug = (path) =>
+  path.split("/").pop().replace(/\.png$/, "");
+
+// Display-name overrides for portraits whose human-friendly name contains
+// characters that can't be derived from the filename. Add entries here when
+// a new portrait needs an alias (e.g. "D.Va", "Soldier: 76", ...).
+const displayNameAliases = {
 };
+
+export const portraits = (() => {
+  const result = {};
+
+  for (const [path, url] of Object.entries(portraitModules)) {
+    result[kebabToCamel(filenameToSlug(path))] = url;
+  }
+
+  for (const [displayName, key] of Object.entries(displayNameAliases)) {
+    if (result[key]) result[displayName] = result[key];
+  }
+
+  // Preserve legacy behaviour: `none` falls back to ana.
+  result.none = result.ana;
+  return result;
+})();
 
 const updateBanForTeam = (value, team, handler) => {
   const command = team === "team1" ? "team1UpdateBan" : "team2UpdateBan";
   handler({ command, value });
 };
 
+// "jetpackCat" -> "Jetpack Cat", "soldier76" -> "Soldier 76", "dva" -> "Dva"
+const humanizeKey = (key) =>
+  key
+    // Insert a space before any uppercase letter or digit run that follows a
+    // lowercase letter/digit boundary.
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+    .replace(/(\d)([a-zA-Z])/g, "$1 $2")
+    // Capitalize the first letter of each whitespace-separated word.
+    .replace(/(^|\s)([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
+
 function TeamBanInput(props) {
-  const nameOptions = Object.keys(portraits).map((name) => ({
-    value: name,
-    label: name.split("/")[4],
-  }));
+  const nameOptions = Object.keys(portraits)
+    .map((name) => ({
+      value: name,
+      label: humanizeKey(name),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
   let selectedValue;
   if (props.selected) {
     const selectMatch = props.selected.match(/\/([a-z0-9\-\_]+)\.png/);
     if (selectMatch) {
-      selectedValue = selectMatch[1];
+      // Align with the camelCase option `value`s so antd can resolve the
+      // matching option and render its humanized label.
+      selectedValue = kebabToCamel(selectMatch[1]);
     }
   }
   return (
