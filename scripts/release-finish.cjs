@@ -167,7 +167,7 @@ function main() {
 
     // 6. Create the annotated tag pointing at the resolved SHA.
     info(`Creating annotated tag ${tagName}…`)
-    run('git', ['tag', '-a', tagName, '-m', `Release ${tagName}`, mainSha])
+    run('git', ['tag', '-a', tagName, '-m', `"Release ${tagName}"`, mainSha])
 
     // 7. Push only the tag (not the current branch).
     info(`Pushing ${tagName} to origin…`)
