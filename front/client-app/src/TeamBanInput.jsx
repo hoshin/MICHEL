@@ -13,13 +13,15 @@ const kebabToCamel = (slug) =>
   slug.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
 
 const filenameToSlug = (path) =>
-  path.split("/").pop().replace(/\.png$/, "");
+  path
+    .split("/")
+    .pop()
+    .replace(/\.png$/, "");
 
 // Display-name overrides for portraits whose human-friendly name contains
 // characters that can't be derived from the filename. Add entries here when
 // a new portrait needs an alias (e.g. "D.Va", "Soldier: 76", ...).
-const displayNameAliases = {
-};
+const displayNameAliases = {};
 
 export const portraits = (() => {
   const result = {};

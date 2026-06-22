@@ -97,7 +97,10 @@ class TeamsDataSocketManager {
     try {
       listener(this.status);
     } catch (err) {
-      console.error("[teamsDataSocket] status listener threw on subscribe", err);
+      console.error(
+        "[teamsDataSocket] status listener threw on subscribe",
+        err,
+      );
     }
     return () => {
       this.statusListeners.delete(listener);

@@ -169,7 +169,11 @@ function buildCatchupIntent(snapshot) {
   if (typeof tournamentLogo === "string")
     intent.tournamentLogo = tournamentLogo;
   const mapCount = snapshot.display?.mapCount;
-  if (typeof mapCount === "number" && Number.isFinite(mapCount) && mapCount >= 1)
+  if (
+    typeof mapCount === "number" &&
+    Number.isFinite(mapCount) &&
+    mapCount >= 1
+  )
     intent.mapCount = mapCount;
   // Team logos are included alongside names/scores. The back applies the
   // same skip-on-matchId rule to logos as to names: when a FaceIt fetch
@@ -258,54 +262,54 @@ function ConfigurationCenter() {
     );
     return () => clearTimeout(timer);
   }, [resyncNotice]);
-    const runInterval = (from) => {
-        currentRef.current = from;
-        notifyCountdown(from);
-        setRunning(true);
-        countdownRef.current = setInterval(() => {
-            currentRef.current = currentRef.current <= 1 ? 0 : currentRef.current - 1;
-            notifyCountdown(currentRef.current);
-            if (currentRef.current === 0) {
-                clearInterval(countdownRef.current);
-                countdownRef.current = null;
-                setRunning(false);
-            }
-        }, 1000);
-    };
+  const runInterval = (from) => {
+    currentRef.current = from;
+    notifyCountdown(from);
+    setRunning(true);
+    countdownRef.current = setInterval(() => {
+      currentRef.current = currentRef.current <= 1 ? 0 : currentRef.current - 1;
+      notifyCountdown(currentRef.current);
+      if (currentRef.current === 0) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        setRunning(false);
+      }
+    }, 1000);
+  };
 
-    // Countdown lives on the back-end now, so we just read its current
-    // running state and forward user actions as commands. This keeps every
-    // open overlay (including OBS browser sources) perfectly in sync, and
-    // lets the timer survive a Config Center reload.
-    const running = !!teamsData?.display?.countdownRunning;
-    const currentValue = teamsData?.display?.countdown ?? 0;
+  // Countdown lives on the back-end now, so we just read its current
+  // running state and forward user actions as commands. This keeps every
+  // open overlay (including OBS browser sources) perfectly in sync, and
+  // lets the timer survive a Config Center reload.
+  const running = !!teamsData?.display?.countdownRunning;
+  const currentValue = teamsData?.display?.countdown ?? 0;
 
-    const startStopCountdown = () => {
-        if (running) {
-            send({ command: "countdownPause" });
-        } else if (currentValue > 0) {
-            // Currently paused — resume from where we left off.
-            send({ command: "countdownResume" });
-        } else {
-            // Idle — start fresh from the configured value.
-            send({ command: "countdownStart", value: timerValue });
-        }
-    };
+  const startStopCountdown = () => {
+    if (running) {
+      send({ command: "countdownPause" });
+    } else if (currentValue > 0) {
+      // Currently paused — resume from where we left off.
+      send({ command: "countdownResume" });
+    } else {
+      // Idle — start fresh from the configured value.
+      send({ command: "countdownStart", value: timerValue });
+    }
+  };
 
-    const resetCountdown = () => {
-        send({ command: "countdownReset", value: timerValue });
-    };
-    // Native <input type="color"> always returns a `#rrggbb` string and
-    // cannot represent "no color" — so we keep the picker showing the
-    // currently broadcast color (or black as a neutral default) and provide
-    // a separate Reset button to clear the override.
-    const countdownColor = teamsData?.display?.countdownColor ?? "";
-    const updateCountdownColor = (event) => {
-        send({ command: "countdownSetColor", value: event.target.value });
-    };
-    const resetCountdownColor = () => {
-        send({ command: "countdownSetColor", value: "" });
-    };
+  const resetCountdown = () => {
+    send({ command: "countdownReset", value: timerValue });
+  };
+  // Native <input type="color"> always returns a `#rrggbb` string and
+  // cannot represent "no color" — so we keep the picker showing the
+  // currently broadcast color (or black as a neutral default) and provide
+  // a separate Reset button to clear the override.
+  const countdownColor = teamsData?.display?.countdownColor ?? "";
+  const updateCountdownColor = (event) => {
+    send({ command: "countdownSetColor", value: event.target.value });
+  };
+  const resetCountdownColor = () => {
+    send({ command: "countdownSetColor", value: "" });
+  };
   const sendCommandHandler = (command) => (event) => {
     event.preventDefault();
     send({ command, value: event.target.value });
@@ -349,25 +353,25 @@ function ConfigurationCenter() {
     <Flex vertical>
       <Flex justify={"center"} align={"center"}>
         <div className="app-name">M.I.C.H.E.L.</div>
-        <ConnectionBadge/>
+        <ConnectionBadge />
       </Flex>
       <Flex>
         {resyncNotice ? (
-            <div
-                role="status"
-                aria-live="polite"
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 4,
-                  background: "rgba(70, 163, 94, 0.15)",
-                  color: "#46a35e",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  letterSpacing: 0.3,
-                }}
-            >
-              {resyncNotice}
-            </div>
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              padding: "4px 10px",
+              borderRadius: 4,
+              background: "rgba(70, 163, 94, 0.15)",
+              color: "#46a35e",
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+            }}
+          >
+            {resyncNotice}
+          </div>
         ) : null}
       </Flex>
       <Flex justify={"space-between"} align={"center"}>
@@ -499,7 +503,9 @@ function ConfigurationCenter() {
                   min={1}
                   value={timerValue}
                   onChange={(e) =>
-                    setTimerValue(Math.max(1, parseInt(e.target.value, 10) || 1))
+                    setTimerValue(
+                      Math.max(1, parseInt(e.target.value, 10) || 1),
+                    )
                   }
                   style={{ width: "100px" }}
                 />
@@ -571,7 +577,13 @@ function ConfigurationCenter() {
                   Active: <code>{countdownColor}</code>
                 </span>
               ) : (
-                <span style={{ fontSize: "0.85em", color: "#333", fontStyle: "italic" }}>
+                <span
+                  style={{
+                    fontSize: "0.85em",
+                    color: "#333",
+                    fontStyle: "italic",
+                  }}
+                >
                   Using default
                 </span>
               )}

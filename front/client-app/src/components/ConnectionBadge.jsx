@@ -1,5 +1,9 @@
 import { useTeamsData } from "../teamsDataSocket.ts";
-import {CheckCircleOutlined, DisconnectOutlined, LoginOutlined} from "@ant-design/icons";
+import {
+  CheckCircleOutlined,
+  DisconnectOutlined,
+  LoginOutlined,
+} from "@ant-design/icons";
 
 /**
  * Tiny diagnostic badge that pins the current WebSocket connection status
@@ -28,10 +32,10 @@ function ConnectionBadge({ corner = "top-left" }) {
     "top-left": { left: 16, top: 12 },
   };
   const iconByStatus = {
-      connecting: <LoginOutlined />,
-      closed: <DisconnectOutlined />,
-      open: <CheckCircleOutlined />
-  }
+    connecting: <LoginOutlined />,
+    closed: <DisconnectOutlined />,
+    open: <CheckCircleOutlined />,
+  };
 
   const colorByStatus = {
     connecting: "#dba300",
@@ -57,7 +61,7 @@ function ConnectionBadge({ corner = "top-left" }) {
         ...positionStyles[corner],
       }}
     >
-      Backend connection: { iconByStatus[status] }
+      Backend connection: {iconByStatus[status]}
     </div>
   );
 }

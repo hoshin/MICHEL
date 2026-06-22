@@ -1,3 +1,9 @@
-# Ignore artifacts:
-build
-coverage
+# Build output
+dist
+
+# Dependencies
+node_modules
+package-lock.json
+
+# Binary / generated assets (fonts, images)
+src/assets
