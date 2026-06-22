@@ -1,4 +1,4 @@
-import { portraits } from "./TeamBanInput.jsx";
+import { portraits } from "./teamBanInput.helpers.js";
 import { useTeamsData } from "./teamsDataSocket.ts";
 
 function TeamBan(props) {

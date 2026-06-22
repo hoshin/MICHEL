@@ -5,7 +5,7 @@ import CountdownTimer from "./components/CountdownTimer.jsx";
 
 import "./ConfigurationCenter.css";
 import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
-import { portraits } from "./TeamBanInput.jsx";
+import { portraits } from "./teamBanInput.helpers.js";
 import {
   Button,
   Card,
