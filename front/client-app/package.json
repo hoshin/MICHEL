@@ -10,8 +10,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "preview": "vite preview",
     "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,css,html,json,md}": "prettier --write"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
@@ -26,11 +31,13 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.21.0",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.15.0",
     "husky": "^9.1.7",
-    "prettier": "^3.8.3",
+    "lint-staged": "^17.0.8",
+    "prettier": "3.8.3",
     "vite": "6.3.4"
   }
 }
