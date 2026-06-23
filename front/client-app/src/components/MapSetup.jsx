@@ -1,5 +1,4 @@
-import "./MapSetup.css";
-import { Flex } from "antd";
+import { Button, Flex, Input } from "antd";
 
 function MapSetup({
   increaseMapCount,
@@ -9,24 +8,24 @@ function MapSetup({
   mapCount,
 }) {
   return (
-    <Flex vertical>
-      <Flex justify={"space-between"}>
-        <div>Format</div>
-        <input
-          type="text"
+    <Flex vertical gap={"small"}>
+      <Flex justify={"space-between"} align={"center"} gap={"small"}>
+        <span className="field-label">Format</span>
+        <Input
+          size={"small"}
           onChange={updateMapFormat}
           defaultValue={mapFormat}
           style={{ width: "50%" }}
         />
       </Flex>
-      <Flex justify={"space-between"}>
-        <button className="button" onClick={increaseMapCount}>
+      <Flex justify={"space-between"} align={"center"}>
+        <Button size={"small"} onClick={increaseMapCount}>
           +
-        </button>
+        </Button>
         <span>Current map : {mapCount}</span>
-        <button className="button" onClick={decreaseMapCount}>
+        <Button size={"small"} onClick={decreaseMapCount}>
           -
-        </button>
+        </Button>
       </Flex>
     </Flex>
   );

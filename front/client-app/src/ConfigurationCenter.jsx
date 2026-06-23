@@ -6,22 +6,43 @@ import CountdownTimer from "./components/CountdownTimer.jsx";
 import "./ConfigurationCenter.css";
 import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
 import { portraits } from "./TeamBanInput.jsx";
-import { Card, Flex, Table } from "antd";
+import {
+  Button,
+  Card,
+  Collapse,
+  ConfigProvider,
+  Flex,
+  Input,
+  InputNumber,
+  notification,
+  Switch,
+  Table,
+  theme,
+} from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useTeamsData } from "./teamsDataSocket.ts";
+import { useFaceItMode } from "./faceItMode.js";
+import { useDarkMode } from "./darkMode.js";
 import ConnectionBadge from "./components/ConnectionBadge.jsx";
 import { PlayCircleOutlined, PauseCircleOutlined } from "@ant-design/icons";
 
-function copyURI(evt) {
+export function copyURI(evt) {
   evt.preventDefault();
-  navigator.clipboard
+  return navigator.clipboard
     .writeText(`http://localhost:5173${evt.target.getAttribute("href")}`)
     .then(
       () => {
-        /* clipboard successfully set */
+        notification.open({
+          message: "Copied to clipboard",
+          description:
+            "The link to the scene was copied to your clipboard. You can now paste it into your browser's address bar to open the scene, or use it to set an OBS browser source up.",
+        });
       },
-      () => {
-        /* clipboard write failed */
+      (err) => {
+        notification.open({
+          message: "Could not copy to clipboard",
+          description: `/o\\ there was an error copying the link to the clipboard (${err.message}).`,
+        });
       },
     );
 }
@@ -223,8 +244,6 @@ function ConfigurationCenter() {
   const { teamsData, status, send, consumeCatchupIntent } = useTeamsData();
   const [resyncNotice, setResyncNotice] = useState(null);
   const [timerValue, setTimerValue] = useState(60);
-  const countdownRef = useRef(null);
-  const currentRef = useRef(null);
   // Track the previous status so we can detect the transition into `open`
   // that follows a disconnect (i.e. a reconnect) and fire a catchup. We
   // use a ref rather than state because we don't want this transition
@@ -262,20 +281,6 @@ function ConfigurationCenter() {
     );
     return () => clearTimeout(timer);
   }, [resyncNotice]);
-  const runInterval = (from) => {
-    currentRef.current = from;
-    notifyCountdown(from);
-    setRunning(true);
-    countdownRef.current = setInterval(() => {
-      currentRef.current = currentRef.current <= 1 ? 0 : currentRef.current - 1;
-      notifyCountdown(currentRef.current);
-      if (currentRef.current === 0) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-        setRunning(false);
-      }
-    }, 1000);
-  };
 
   // Countdown lives on the back-end now, so we just read its current
   // running state and forward user actions as commands. This keeps every
@@ -332,6 +337,17 @@ function ConfigurationCenter() {
   const { mapFormat, mapCount, tournamentLogo, optionalLogoDisplay } =
     teamsData.display;
   const { faceIt } = teamsData;
+  const [faceItModeEnabled, setFaceItMode] = useFaceItMode(faceIt);
+  const [darkModeEnabled, setDarkMode] = useDarkMode();
+
+  // Drive the page-level background/text off a body class so the dark theme
+  // covers the full viewport, not just the antd-styled cards. Cleaned up on
+  // unmount so other routes (the OBS overlays) are never left dark.
+  useEffect(() => {
+    const body = document.body;
+    body.classList.toggle("michel-dark", darkModeEnabled);
+    return () => body.classList.remove("michel-dark");
+  }, [darkModeEnabled]);
 
   const { standings } = teamsData;
   const logo = tournamentLogo?.startsWith("faceit")
@@ -350,200 +366,194 @@ function ConfigurationCenter() {
   }
 
   return (
-    <Flex vertical>
-      <Flex justify={"center"} align={"center"}>
-        <div className="app-name">M.I.C.H.E.L.</div>
-        <ConnectionBadge />
-      </Flex>
-      <Flex>
+    <ConfigProvider
+      theme={{
+        algorithm: [
+          darkModeEnabled ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          theme.compactAlgorithm,
+        ],
+        token: { borderRadius: 6 },
+        components: {
+          Card: { paddingSM: 10 },
+        },
+      }}
+    >
+      <div
+        className={`config-dashboard${darkModeEnabled ? " config-dashboard--dark" : ""}`}
+      >
+        <Flex
+          className="dark-mode-toggle"
+          justify={"flex-end"}
+          align={"center"}
+          gap={"small"}
+        >
+          <span>Dark mode</span>
+          <Switch
+            size={"small"}
+            aria-label={"Dark mode"}
+            checked={darkModeEnabled}
+            onChange={setDarkMode}
+          />
+        </Flex>
+        <Flex
+          className="config-header"
+          justify={"space-between"}
+          align={"center"}
+          gap={"small"}
+        >
+          <Flex>
+            <div className="app-name">M.I.C.H.E.L.</div>
+            <ConnectionBadge inline />
+          </Flex>
+          <Flex align={"center"} gap={"middle"}>
+            <label className="faceit-mode-toggle">
+              <span>FaceIt mode</span>
+              <Switch
+                size={"small"}
+                aria-label={"FaceIt mode"}
+                checked={faceItModeEnabled}
+                onChange={setFaceItMode}
+              />
+            </label>
+          </Flex>
+        </Flex>
+
         {resyncNotice ? (
-          <div
-            role="status"
-            aria-live="polite"
-            style={{
-              padding: "4px 10px",
-              borderRadius: 4,
-              background: "rgba(70, 163, 94, 0.15)",
-              color: "#46a35e",
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: 0.3,
-            }}
-          >
+          <div role="status" aria-live="polite" className="resync-notice">
             {resyncNotice}
           </div>
         ) : null}
-      </Flex>
-      <Flex justify={"space-between"} align={"center"}>
-        <TeamForm
-          teamUpdateName={sendCommandHandler("updateTeam1Name")}
-          teamIncreaseScore={sendCommandHandler("increaseTeam1Score")}
-          teamDecreaseScore={sendCommandHandler("decreaseTeam1Score")}
-          teamName={team1Name}
-          teamScore={team1Score}
-          teamLogo={team1Logo}
-          teamBanLogo={team1BanForCurrentMap}
-          updateTeamLogo={sendCommandHandler("updateTeam1Logo")}
-          teamUpdateBan={noEventSendCommandHandler("team1UpdateBan")}
-          side={"team1"}
-        />
-        <TeamForm
-          teamUpdateName={sendCommandHandler("updateTeam2Name")}
-          teamIncreaseScore={sendCommandHandler("increaseTeam2Score")}
-          teamDecreaseScore={sendCommandHandler("decreaseTeam2Score")}
-          teamName={team2Name}
-          teamScore={team2Score}
-          teamLogo={team2Logo}
-          teamBanLogo={team2BanForCurrentMap}
-          updateTeamLogo={sendCommandHandler("updateTeam2Logo")}
-          teamUpdateBan={noEventSendCommandHandler("team2UpdateBan")}
-          side={"team2"}
-        />
-      </Flex>
-      <Flex justify={"space-between"} align={"center"}>
-        <Card
-          size={"small"}
-          title={""}
-          style={{ backgroundColor: "#a1a1a1", width: "50%" }}
-        >
-          <MapSetup
-            increaseMapCount={sendCommandHandler("increaseMapCount")}
-            decreaseMapCount={sendCommandHandler("decreaseMapCount")}
-            updateMapFormat={sendCommandHandler("updateMapFormat")}
-            mapFormat={mapFormat}
-            mapCount={mapCount}
+
+        <Flex gap={"small"} align={"stretch"} className="teams-row">
+          <TeamForm
+            teamUpdateName={sendCommandHandler("updateTeam1Name")}
+            teamIncreaseScore={sendCommandHandler("increaseTeam1Score")}
+            teamDecreaseScore={sendCommandHandler("decreaseTeam1Score")}
+            teamName={team1Name}
+            teamScore={team1Score}
+            teamLogo={team1Logo}
+            teamBanLogo={team1BanForCurrentMap}
+            updateTeamLogo={sendCommandHandler("updateTeam1Logo")}
+            teamUpdateBan={noEventSendCommandHandler("team1UpdateBan")}
+            side={"team1"}
           />
-        </Card>
-        <Card
-          size={"small"}
-          title=""
-          style={{ backgroundColor: "#a1a1a1", width: "50%" }}
-        >
-          <button
-            style={{
-              width: "100%",
-              height: "100%",
-              fontWeight: 800,
-              padding: "1em",
+          <TeamForm
+            teamUpdateName={sendCommandHandler("updateTeam2Name")}
+            teamIncreaseScore={sendCommandHandler("increaseTeam2Score")}
+            teamDecreaseScore={sendCommandHandler("decreaseTeam2Score")}
+            teamName={team2Name}
+            teamScore={team2Score}
+            teamLogo={team2Logo}
+            teamBanLogo={team2BanForCurrentMap}
+            updateTeamLogo={sendCommandHandler("updateTeam2Logo")}
+            teamUpdateBan={noEventSendCommandHandler("team2UpdateBan")}
+            side={"team2"}
+          />
+        </Flex>
+
+        <Flex gap={"small"} align={"stretch"} className="match-row">
+          <Card size={"small"} title={"Maps"} style={{ flex: 1 }}>
+            <MapSetup
+              increaseMapCount={sendCommandHandler("increaseMapCount")}
+              decreaseMapCount={sendCommandHandler("decreaseMapCount")}
+              updateMapFormat={sendCommandHandler("updateMapFormat")}
+              mapFormat={mapFormat}
+              mapCount={mapCount}
+            />
+          </Card>
+          <Card
+            size={"small"}
+            style={{ flex: 1 }}
+            styles={{
+              body: { height: "100%", padding: 0, display: "flex" },
             }}
-            onClick={sendCommandHandler("swapTeams")}
           >
-            Swap Teams
-          </button>
-        </Card>
-      </Flex>
-      <Flex>
-        <Card
-          size={"small"}
-          title="Tournament / Broadcaster Logo"
-          style={{ width: "100%", backgroundColor: "#a1a1a1" }}
-        >
-          <Flex justify={"space-between"} align={"center"}>
-            <input
-              width={"50%"}
-              type="text"
+            <Button
+              block
+              style={{ height: "100%", fontWeight: 800, margin: 0 }}
+              onClick={sendCommandHandler("swapTeams")}
+            >
+              Swap Teams (scenes)
+            </Button>
+          </Card>
+        </Flex>
+
+        <Card size={"small"} title="Tournament / Broadcaster Logo">
+          <Flex justify={"space-between"} align={"center"} gap={"small"}>
+            <Input
+              size={"small"}
+              style={{ flex: 1 }}
               onChange={sendCommandHandler("updateTournamentLogo")}
               defaultValue={logo}
             />
             <div className="logo-preview">
-              {logo ? <img height="60px" src={logo}></img> : null}
-              <div>Show in mini-score</div>
-              <input
-                type="checkbox"
-                onChange={sendCommandHandler("toggleOptionalLogoDisplay")}
-                checked={optionalLogoDisplay}
-              />
+              {logo ? <img height="40px" src={logo}></img> : null}
+              <label>
+                <span>Mini-score</span>
+                <input
+                  type="checkbox"
+                  onChange={sendCommandHandler("toggleOptionalLogoDisplay")}
+                  checked={optionalLogoDisplay}
+                />
+              </label>
             </div>
           </Flex>
         </Card>
-      </Flex>
-      <Flex justify={"space-between"} align={"center"}>
-        <Card
-          size={"small"}
-          title={"FaceIt Configuration"}
-          style={{ width: "100%", backgroundColor: "#a1a1a1" }}
-        >
-          <Flex justify={"space-between"} align={"center"}>
-            <Flex vertical style={{ width: "70%" }}>
-              <div>FaceIt match ID</div>
-              <input
-                type="text"
-                onChange={sendCommandHandler("updateFromMatchId")}
-                defaultValue={faceIt?.matchId}
-              />
-            </Flex>
-            <button
-              style={{
-                width: "50%",
-                height: "100%",
-                fontWeight: 800,
-                padding: "1em",
-              }}
-              value={mapCount}
-              onClick={sendCommandHandler("fetchFaceItMatchUpdates")}
-            >
-              Refresh room data
-            </button>
-          </Flex>
-        </Card>
-      </Flex>
 
-      <Flex>
-        <Card
-          size={"small"}
-          title={"Timer"}
-          style={{ width: "100%", backgroundColor: "#a1a1a1" }}
-        >
+        {faceItModeEnabled ? (
+          <Card size={"small"} title={"FaceIt Configuration"}>
+            <Flex justify={"space-between"} align={"flex-end"} gap={"small"}>
+              <Flex vertical style={{ flex: 1 }}>
+                <div>FaceIt match ID</div>
+                <Input
+                  size={"small"}
+                  onChange={sendCommandHandler("updateFromMatchId")}
+                  defaultValue={faceIt?.matchId}
+                />
+              </Flex>
+              <Button
+                type={"primary"}
+                value={mapCount}
+                onClick={sendCommandHandler("fetchFaceItMatchUpdates")}
+              >
+                Refresh room data
+              </Button>
+            </Flex>
+          </Card>
+        ) : null}
+
+        <Card size={"small"} title={"Timer"}>
           <Flex vertical gap={"small"}>
-            <Flex justify={"space-between"} align={"center"} gap={"middle"}>
+            <Flex justify={"space-between"} align={"center"} gap={"small"}>
               <Flex vertical style={{ flexShrink: 0 }}>
-                <div>Duration (seconds)</div>
-                <input
-                  type="number"
+                <div>Duration (s)</div>
+                <InputNumber
+                  size={"small"}
                   min={1}
                   value={timerValue}
-                  onChange={(e) =>
-                    setTimerValue(
-                      Math.max(1, parseInt(e.target.value, 10) || 1),
-                    )
+                  onChange={(value) =>
+                    setTimerValue(Math.max(1, parseInt(value, 10) || 1))
                   }
-                  style={{ width: "100px" }}
+                  style={{ width: "80px" }}
                 />
               </Flex>
               <Flex gap={"small"} wrap={"wrap"}>
-                <button
-                  style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
+                <Button
+                  type={"primary"}
+                  icon={
+                    running ? <PauseCircleOutlined /> : <PlayCircleOutlined />
+                  }
                   onClick={startStopCountdown}
                 >
-                  {running ? (
-                    <>
-                      Pause <PauseCircleOutlined />
-                    </>
-                  ) : (
-                    <>
-                      Start <PlayCircleOutlined />
-                    </>
-                  )}
-                </button>
-                <button
-                  style={{ fontWeight: 800, padding: "0.6em 1.2em" }}
-                  onClick={resetCountdown}
-                >
-                  Reset
-                </button>
+                  {running ? "Pause" : "Start"}
+                </Button>
+                <Button onClick={resetCountdown}>Reset</Button>
               </Flex>
-              <div
-                style={{
-                  fontSize: "1.8em",
-                  fontWeight: 800,
-                  minWidth: "4ch",
-                  textAlign: "center",
-                }}
-              >
+              <div className="timer-readout">
                 <CountdownTimer fontSize={"1em"} />
               </div>
             </Flex>
-            <Flex align={"center"} gap={"small"}>
+            <Flex align={"center"} gap={"small"} wrap={"wrap"}>
               <label htmlFor="countdown-color-picker">Color</label>
               <input
                 id="countdown-color-picker"
@@ -564,49 +574,47 @@ function ConfigurationCenter() {
                   cursor: "pointer",
                 }}
               />
-              <button
-                style={{ fontWeight: 600, padding: "0.3em 0.8em" }}
+              <Button
+                size={"small"}
                 onClick={resetCountdownColor}
                 disabled={!countdownColor}
                 title={"Clear the color override and use the default"}
               >
                 Reset color
-              </button>
+              </Button>
               {countdownColor ? (
-                <span style={{ fontSize: "0.85em", color: "#333" }}>
+                <span className="timer-color-note">
                   Active: <code>{countdownColor}</code>
                 </span>
               ) : (
-                <span
-                  style={{
-                    fontSize: "0.85em",
-                    color: "#333",
-                    fontStyle: "italic",
-                  }}
-                >
+                <span className="timer-color-note timer-color-note--default">
                   Using default
                 </span>
               )}
             </Flex>
           </Flex>
         </Card>
-      </Flex>
 
-      <Flex>
-        <Card
+        <Collapse
           size={"small"}
-          title={""}
-          style={{ width: "100%", backgroundColor: "#a1a1a1" }}
-        >
-          <Table
-            style={{ width: "100%" }}
-            columns={columns}
-            dataSource={data}
-            pagination={false}
-          />
-        </Card>
-      </Flex>
-    </Flex>
+          items={[
+            {
+              key: "scene-links",
+              label: "Scene links",
+              children: (
+                <Table
+                  size={"small"}
+                  style={{ width: "100%" }}
+                  columns={columns}
+                  dataSource={data}
+                  pagination={false}
+                />
+              ),
+            },
+          ]}
+        />
+      </div>
+    </ConfigProvider>
   );
 }
 

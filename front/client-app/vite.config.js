@@ -10,7 +10,8 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: "node",
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.js"],
     include: ["src/**/*.{test,spec}.{js,jsx,ts,tsx}"],
   },
 });

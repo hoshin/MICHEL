@@ -1,64 +1,54 @@
 import "./TeamForm.css";
 import TeamBanInput from "../TeamBanInput.jsx";
-import { Card, Flex } from "antd";
+import { Button, Card, Flex, Input } from "antd";
 
 export function TeamForm(props) {
   return (
-    <Card size={"small"} style={{ backgroundColor: "#a1a1a1" }}>
-      <Flex vertical>
+    <Card size={"small"}>
+      <Flex vertical gap={"small"}>
         <Flex
           justify={"space-between"}
           align={"center"}
-          style={{ width: "100%", height: "50px", marginBottom: "1em" }}
+          className="team-header"
         >
           <img className="team-logo-img" src={props.teamLogo}></img>
           {props.teamBanLogo ? (
             <img className="team-logo-img" src={props.teamBanLogo}></img>
           ) : undefined}
-          <div
-            style={{
-              fontWeight: 600,
-              fontSize: "3.5rem",
-              marginRight: "0.2em",
-            }}
-          >
-            {props.teamScore}
-          </div>
+          <div className="team-score">{props.teamScore}</div>
         </Flex>
-        <Flex justify={"space-between"} style={{ marginBottom: "1em" }}>
-          <div>Name</div>
-          <input
-            width={"80%"}
-            type="text"
+        <Flex justify={"space-between"} align={"center"} gap={"small"}>
+          <span className="field-label">Name</span>
+          <Input
+            size={"small"}
             onChange={props.teamUpdateName}
-            defaultValue={props.teamName}
+            value={props.teamName}
           />
         </Flex>
-        <Flex justify={"space-between"} style={{ marginBottom: "1em" }}>
-          <div>Score</div>
-          <div>
-            <button className="button" onClick={props.teamIncreaseScore}>
+        <Flex justify={"space-between"} align={"center"}>
+          <span className="field-label">Score</span>
+          <Flex gap={"small"}>
+            <Button size={"small"} onClick={props.teamIncreaseScore}>
               +
-            </button>
-            <button className="button" onClick={props.teamDecreaseScore}>
+            </Button>
+            <Button size={"small"} onClick={props.teamDecreaseScore}>
               -
-            </button>
-          </div>
+            </Button>
+          </Flex>
         </Flex>
-        <Flex justify={"space-between"} style={{ marginBottom: "1em" }}>
+        <Flex justify={"space-between"}>
           <TeamBanInput
             team={props.side}
             handler={props.teamUpdateBan}
             selected={props.teamBanLogo}
           />
         </Flex>
-        <Flex justify={"space-between"} style={{ marginBottom: "1em" }}>
-          <div className="section-name">Logo</div>
-          <input
-            width={"50%"}
-            type="text"
+        <Flex justify={"space-between"} align={"center"} gap={"small"}>
+          <span className="field-label">Logo</span>
+          <Input
+            size={"small"}
             onChange={props.updateTeamLogo}
-            defaultValue={props.teamLogo}
+            value={props.teamLogo}
           />
         </Flex>
       </Flex>
