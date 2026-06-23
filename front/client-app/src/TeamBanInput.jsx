@@ -64,7 +64,7 @@ function TeamBanInput(props) {
     .sort((a, b) => a.label.localeCompare(b.label));
   let selectedValue;
   if (props.selected) {
-    const selectMatch = props.selected.match(/\/([a-z0-9\-\_]+)\.png/);
+    const selectMatch = props.selected.match(/\/([a-z0-9\-_]+)\.png/);
     if (selectMatch) {
       // Align with the camelCase option `value`s so antd can resolve the
       // matching option and render its humanized label.
