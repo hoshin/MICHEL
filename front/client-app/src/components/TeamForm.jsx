@@ -11,9 +11,17 @@ export function TeamForm(props) {
           align={"center"}
           className="team-header"
         >
-          <img className="team-logo-img" src={props.teamLogo}></img>
+          <img
+            className="team-logo-img"
+            src={props.teamLogo}
+            alt={`${props.side} team name`}
+          ></img>
           {props.teamBanLogo ? (
-            <img className="team-logo-img" src={props.teamBanLogo}></img>
+            <img
+              className="team-logo-img"
+              src={props.teamBanLogo}
+              alt={`${props.side} banned hero portrait`}
+            ></img>
           ) : undefined}
           <div className="team-score">{props.teamScore}</div>
         </Flex>

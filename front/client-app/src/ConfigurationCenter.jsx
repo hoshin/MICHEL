@@ -28,6 +28,15 @@ import { PlayCircleOutlined, PauseCircleOutlined } from "@ant-design/icons";
 
 export function copyURI(evt) {
   evt.preventDefault();
+
+  if(typeof navigator?.clipboard?.writeText !== "function"){
+    notification.open({
+      message: "Clipboard not supported",
+      description: "Your browser does not support copying to the clipboard.",
+    });
+    return;
+  }
+
   return navigator.clipboard
     .writeText(`http://localhost:5173${evt.target.getAttribute("href")}`)
     .then(
@@ -282,21 +291,22 @@ function ConfigurationCenter() {
     return () => clearTimeout(timer);
   }, [resyncNotice]);
 
-  // Countdown lives on the back-end now, so we just read its current
+  // Countdown core data lives on the back-end: we just read its current
   // running state and forward user actions as commands. This keeps every
-  // open overlay (including OBS browser sources) perfectly in sync, and
+  // open overlay (including OBS browser sources) in sync, and
   // lets the timer survive a Config Center reload.
   const running = !!teamsData?.display?.countdownRunning;
   const currentValue = teamsData?.display?.countdown ?? 0;
 
   const startStopCountdown = () => {
     if (running) {
+      // running => pause
       send({ command: "countdownPause" });
     } else if (currentValue > 0) {
-      // Currently paused — resume from where we left off.
+      // paused => resume
       send({ command: "countdownResume" });
     } else {
-      // Idle — start fresh from the configured value.
+      // Idle => start
       send({ command: "countdownStart", value: timerValue });
     }
   };
@@ -304,10 +314,8 @@ function ConfigurationCenter() {
   const resetCountdown = () => {
     send({ command: "countdownReset", value: timerValue });
   };
-  // Native <input type="color"> always returns a `#rrggbb` string and
-  // cannot represent "no color" — so we keep the picker showing the
-  // currently broadcast color (or black as a neutral default) and provide
-  // a separate Reset button to clear the override.
+  // We keep the picker showing the currently broadcast color (or black as a neutral default)
+  // and provide a separate Reset button to clear the override.
   const countdownColor = teamsData?.display?.countdownColor ?? "";
   const updateCountdownColor = (event) => {
     send({ command: "countdownSetColor", value: event.target.value });
@@ -364,6 +372,13 @@ function ConfigurationCenter() {
       standings[`match${mapCount}`]?.bans?.team2,
     );
   }
+
+  // Done specifically for the dark & light modes in the ConfigurationCenter
+  // That way we do not have to worry about the color of the timer being too dark or bright
+  // depending on the theme AND the picked color
+  const countdownColorForConfigurationCenter = darkModeEnabled
+    ? "#fff"
+    : "#000";
 
   return (
     <ConfigProvider
@@ -550,11 +565,14 @@ function ConfigurationCenter() {
                 <Button onClick={resetCountdown}>Reset</Button>
               </Flex>
               <div className="timer-readout">
-                <CountdownTimer fontSize={"1em"} />
+                <CountdownTimer
+                  fontSize={"1em"}
+                  color={countdownColorForConfigurationCenter}
+                />
               </div>
             </Flex>
             <Flex align={"center"} gap={"small"} wrap={"wrap"}>
-              <label htmlFor="countdown-color-picker">Color</label>
+              <label htmlFor="countdown-color-picker">Color in scenes</label>
               <input
                 id="countdown-color-picker"
                 type="color"
@@ -580,17 +598,8 @@ function ConfigurationCenter() {
                 disabled={!countdownColor}
                 title={"Clear the color override and use the default"}
               >
-                Reset color
+                Reset
               </Button>
-              {countdownColor ? (
-                <span className="timer-color-note">
-                  Active: <code>{countdownColor}</code>
-                </span>
-              ) : (
-                <span className="timer-color-note timer-color-note--default">
-                  Using default
-                </span>
-              )}
             </Flex>
           </Flex>
         </Card>

@@ -20,7 +20,7 @@ function fakeStorage(initial = {}) {
 }
 
 describe("readDarkModeFromStorage", () => {
-  it("returns null when no choice was stored", () => {
+  it("should return null when no choice was stored", () => {
     // setup
     const storage = fakeStorage();
     // action
@@ -29,7 +29,7 @@ describe("readDarkModeFromStorage", () => {
     expect(result).toBeNull();
   });
 
-  it("reads back a previously written choice", () => {
+  it("should read back a previously written choice", () => {
     // setup
     const storage = fakeStorage({ [DARK_MODE_STORAGE_KEY]: "true" });
     // action
@@ -40,7 +40,7 @@ describe("readDarkModeFromStorage", () => {
 });
 
 describe("writeDarkModeToStorage", () => {
-  it("persists the choice so it can be read back", () => {
+  it("should persist the choice so it can be read back", () => {
     // setup
     const storage = fakeStorage();
     // action
@@ -51,7 +51,7 @@ describe("writeDarkModeToStorage", () => {
 });
 
 describe("resolveInitialDarkMode", () => {
-  it("defaults to light (false) when nothing was stored", () => {
+  it("should default to light (false) when nothing was stored", () => {
     // setup
     const storage = fakeStorage();
     // action
@@ -60,7 +60,7 @@ describe("resolveInitialDarkMode", () => {
     expect(result).toBe(false);
   });
 
-  it("honors a stored 'on' choice", () => {
+  it("should return 'true' when a stored 'on' choice is found", () => {
     // setup
     const storage = fakeStorage({ [DARK_MODE_STORAGE_KEY]: "true" });
     // action
@@ -69,7 +69,7 @@ describe("resolveInitialDarkMode", () => {
     expect(result).toBe(true);
   });
 
-  it("honors a stored 'off' choice", () => {
+  it("should return 'false' when a stored 'off' choice is found", () => {
     // setup
     const storage = fakeStorage({ [DARK_MODE_STORAGE_KEY]: "false" });
     // action

@@ -20,7 +20,7 @@ function renderTeamForm(overrides = {}) {
 }
 
 describe("TeamForm", () => {
-  it("reflects a team name that arrives after the first render", () => {
+  it("should update team name input if it arrives after the first render", () => {
     // setup — first render mirrors the empty default state, before any
     // FaceIt fetch has populated the name.
     const { rerender } = renderTeamForm({ teamName: "" });
@@ -44,7 +44,7 @@ describe("TeamForm", () => {
     expect(screen.getByDisplayValue("Team Liquid")).toBeInTheDocument();
   });
 
-  it("reflects a team logo URL that arrives after the first render", () => {
+  it("should update the team logo URL if it arrives after the first render", () => {
     // setup
     const { rerender } = renderTeamForm({ teamLogo: "" });
     // action

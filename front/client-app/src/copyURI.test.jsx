@@ -31,7 +31,7 @@ afterEach(() => {
 });
 
 describe("copyURI", () => {
-  it("prevents the default navigation of the anchor", async () => {
+  it("should prevent the default navigation of the anchor", async () => {
     // setup
     vi.stubGlobal("navigator", {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -43,7 +43,7 @@ describe("copyURI", () => {
     expect(event.preventDefault).toHaveBeenCalled();
   });
 
-  it("copies the fully-qualified scene URL to the clipboard", async () => {
+  it("should copy the fully-qualified scene URL to the clipboard", async () => {
     // setup
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
@@ -54,7 +54,7 @@ describe("copyURI", () => {
     expect(writeText).toHaveBeenCalledWith("http://localhost:5173/game-scene");
   });
 
-  it("notifies the operator on a successful copy", async () => {
+  it("should notify the operator on a successful copy", async () => {
     // setup
     vi.stubGlobal("navigator", {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -68,7 +68,7 @@ describe("copyURI", () => {
     );
   });
 
-  it("notifies the operator with the error message on a failed copy", async () => {
+  it("should notify the operator with the error message on a failed copy", async () => {
     // setup
     vi.stubGlobal("navigator", {
       clipboard: {
@@ -83,6 +83,58 @@ describe("copyURI", () => {
       expect.objectContaining({
         message: "Could not copy to clipboard",
         description: expect.stringContaining("permission denied"),
+      }),
+    );
+  });
+
+  it("should notify the operator if no navigator.clipboard.writeText is available", async () => {
+    // setup
+    vi.stubGlobal("navigator", {
+      clipboard: {},
+    });
+    const event = clickEventForHref("/score-scene");
+    // action
+    await copyURI(event);
+    // assert
+    expect(notification.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Clipboard not supported",
+        description: expect.stringContaining(
+          "Your browser does not support copying to the clipboard.",
+        ),
+      }),
+    );
+  });
+
+  it("should notify the operator if navigator.clipboard is undefined", async () => {
+    // setup
+    vi.stubGlobal("navigator", {});
+    const event = clickEventForHref("/score-scene");
+    // action
+    await copyURI(event);
+    // assert
+    expect(notification.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Clipboard not supported",
+        description: expect.stringContaining(
+          "Your browser does not support copying to the clipboard.",
+        ),
+      }),
+    );
+  });
+
+  it("should notify the operator if navigator is undefined", async () => {
+    // setup
+    const event = clickEventForHref("/score-scene");
+    // action
+    await copyURI(event);
+    // assert
+    expect(notification.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Clipboard not supported",
+        description: expect.stringContaining(
+          "Your browser does not support copying to the clipboard.",
+        ),
       }),
     );
   });

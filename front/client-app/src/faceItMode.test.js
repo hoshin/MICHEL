@@ -22,7 +22,7 @@ function fakeStorage(initial = {}) {
 }
 
 describe("hasFaceItMatchId", () => {
-  it("returns true when a non-empty match id is present", () => {
+  it("should return `true` when a non-empty match id is present", () => {
     // setup
     const faceIt = { matchId: "match-123" };
     // action
@@ -31,7 +31,7 @@ describe("hasFaceItMatchId", () => {
     expect(result).toBe(true);
   });
 
-  it("returns false for an empty string, missing field, or missing object", () => {
+  it("should return `false` for an empty string, missing field, or missing object", () => {
     // setup / action / assert
     expect(hasFaceItMatchId({ matchId: "" })).toBe(false);
     expect(hasFaceItMatchId({})).toBe(false);
@@ -40,7 +40,7 @@ describe("hasFaceItMatchId", () => {
 });
 
 describe("readFaceItModeFromStorage", () => {
-  it("returns null when no explicit choice was stored", () => {
+  it("should return `null` when no explicit choice was stored", () => {
     // setup
     const storage = fakeStorage();
     // action
@@ -49,7 +49,7 @@ describe("readFaceItModeFromStorage", () => {
     expect(result).toBeNull();
   });
 
-  it("reads back a previously written boolean choice", () => {
+  it("should return `true` if localStorage is set and its value is `'true'`", () => {
     // setup
     const storage = fakeStorage({ [FACEIT_MODE_STORAGE_KEY]: "true" });
     // action
@@ -57,10 +57,19 @@ describe("readFaceItModeFromStorage", () => {
     // assert
     expect(result).toBe(true);
   });
+
+  it("should return `false` if localStorage is set and its value is different from `'true'`", () => {
+    // setup
+    const storage = fakeStorage({ [FACEIT_MODE_STORAGE_KEY]: "foobar" });
+    // action
+    const result = readFaceItModeFromStorage(storage);
+    // assert
+    expect(result).toBe(false);
+  });
 });
 
 describe("writeFaceItModeToStorage", () => {
-  it("persists the choice so it can be read back", () => {
+  it("should persist the choice so it can be read back", () => {
     // setup
     const storage = fakeStorage();
     // action
@@ -71,7 +80,7 @@ describe("writeFaceItModeToStorage", () => {
 });
 
 describe("resolveInitialFaceItMode", () => {
-  it("auto-enables when there is no stored choice but a match id exists", () => {
+  it("should auto-enable when there is no stored choice but a match id exists", () => {
     // setup
     const storage = fakeStorage();
     const faceIt = { matchId: "match-123" };
@@ -81,7 +90,7 @@ describe("resolveInitialFaceItMode", () => {
     expect(result).toBe(true);
   });
 
-  it("stays off when there is no stored choice and no match id", () => {
+  it("should stay off when there is no stored choice and no match id", () => {
     // setup
     const storage = fakeStorage();
     const faceIt = { matchId: "" };
@@ -91,7 +100,7 @@ describe("resolveInitialFaceItMode", () => {
     expect(result).toBe(false);
   });
 
-  it("lets an explicit stored choice override a present match id", () => {
+  it("should let an explicit stored choice override a present match id", () => {
     // setup
     const storage = fakeStorage({ [FACEIT_MODE_STORAGE_KEY]: "false" });
     const faceIt = { matchId: "match-123" };
@@ -101,7 +110,7 @@ describe("resolveInitialFaceItMode", () => {
     expect(result).toBe(false);
   });
 
-  it("honors an explicit stored 'on' even without a match id", () => {
+  it("should honor an explicit stored 'on' even without a match id", () => {
     // setup
     const storage = fakeStorage({ [FACEIT_MODE_STORAGE_KEY]: "true" });
     const faceIt = { matchId: "" };
@@ -113,7 +122,7 @@ describe("resolveInitialFaceItMode", () => {
 });
 
 describe("shouldAutoEnableOnSnapshot", () => {
-  it("auto-enables when a match id arrives and no explicit choice was stored", () => {
+  it("should auto-enable when a match id arrives and no explicit choice was stored", () => {
     // setup
     const storage = fakeStorage();
     const faceIt = { matchId: "match-123" };
@@ -123,7 +132,7 @@ describe("shouldAutoEnableOnSnapshot", () => {
     expect(result).toBe(true);
   });
 
-  it("does not auto-enable when the operator already chose 'off'", () => {
+  it("should not auto-enable when the operator already chose 'off'", () => {
     // setup
     const storage = fakeStorage({ [FACEIT_MODE_STORAGE_KEY]: "false" });
     const faceIt = { matchId: "match-123" };
@@ -133,7 +142,7 @@ describe("shouldAutoEnableOnSnapshot", () => {
     expect(result).toBe(false);
   });
 
-  it("does not auto-enable when there is no match id", () => {
+  it("should not auto-enable when there is no match id to begin with", () => {
     // setup
     const storage = fakeStorage();
     const faceIt = { matchId: "" };

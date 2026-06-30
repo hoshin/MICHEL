@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 describe("ConfigurationCenter FaceIt mode", () => {
-  it("hides the FaceIt section by default when no match id is configured", () => {
+  it("should hide the FaceIt section by default when no match id is configured", () => {
     // setup
     teamsDataMock.mockReturnValue(buildHookValue({ faceIt: { matchId: "" } }));
     // action
@@ -45,7 +45,7 @@ describe("ConfigurationCenter FaceIt mode", () => {
     expect(screen.queryByText("FaceIt Configuration")).not.toBeInTheDocument();
   });
 
-  it("reveals the FaceIt section when the operator flips the toggle on", async () => {
+  it("should reveal the FaceIt section when the operator flips the toggle on", async () => {
     // setup
     const user = userEvent.setup();
     teamsDataMock.mockReturnValue(buildHookValue({ faceIt: { matchId: "" } }));
@@ -56,7 +56,7 @@ describe("ConfigurationCenter FaceIt mode", () => {
     expect(screen.getByText("FaceIt Configuration")).toBeInTheDocument();
   });
 
-  it("auto-enables FaceIt mode when the back-end already carries a match id", () => {
+  it("should auto-enable FaceIt mode when the back-end already carries a match id", () => {
     // setup
     teamsDataMock.mockReturnValue(
       buildHookValue({ faceIt: { matchId: "match-123" } }),
@@ -68,7 +68,7 @@ describe("ConfigurationCenter FaceIt mode", () => {
     expect(screen.getByRole("switch", { name: "FaceIt mode" })).toBeChecked();
   });
 
-  it("auto-reveals FaceIt when the match id arrives after the first render", () => {
+  it("should auto-reveal FaceIt when the match id arrives after the first render", () => {
     // setup — first render mirrors the DEFAULT_STATE snapshot (no match id),
     // exactly like the real socket before its first push.
     teamsDataMock.mockReturnValue(buildHookValue({ faceIt: { matchId: "" } }));
@@ -84,7 +84,7 @@ describe("ConfigurationCenter FaceIt mode", () => {
     expect(screen.getByRole("switch", { name: "FaceIt mode" })).toBeChecked();
   });
 
-  it("lets a stored 'off' choice override a present match id", () => {
+  it("should hide the FaceIt configuration if faceItMode is set to false even if a FaceIt matchId is set", () => {
     // setup
     window.localStorage.setItem("michel.faceItMode", "false");
     teamsDataMock.mockReturnValue(
@@ -98,7 +98,7 @@ describe("ConfigurationCenter FaceIt mode", () => {
 });
 
 describe("ConfigurationCenter dark mode", () => {
-  it("defaults to light mode (toggle off, no dark body class)", () => {
+  it("should default to light mode (toggle off, no dark body class)", () => {
     // setup / action
     render(<ConfigurationCenter />);
     // assert
@@ -106,7 +106,7 @@ describe("ConfigurationCenter dark mode", () => {
     expect(document.body).not.toHaveClass("michel-dark");
   });
 
-  it("applies the dark body class when the operator flips the toggle on", async () => {
+  it("should apply the dark body class when the operator flips the toggle on", async () => {
     // setup
     const user = userEvent.setup();
     render(<ConfigurationCenter />);
@@ -116,7 +116,7 @@ describe("ConfigurationCenter dark mode", () => {
     expect(document.body).toHaveClass("michel-dark");
   });
 
-  it("persists the dark choice to localStorage", async () => {
+  it("should persist the darkMode choice to localStorage when manually set", async () => {
     // setup
     const user = userEvent.setup();
     render(<ConfigurationCenter />);
@@ -126,7 +126,7 @@ describe("ConfigurationCenter dark mode", () => {
     expect(window.localStorage.getItem("michel.darkMode")).toBe("true");
   });
 
-  it("re-applies a stored dark choice on load", () => {
+  it("should re-apply, a stored darkMode choice on load", () => {
     // setup
     window.localStorage.setItem("michel.darkMode", "true");
     // action
@@ -138,7 +138,7 @@ describe("ConfigurationCenter dark mode", () => {
 });
 
 describe("ConfigurationCenter scene links", () => {
-  it("keeps the scene links table collapsed by default", () => {
+  it("should have the scene links table collapsed by default", () => {
     // setup
     render(<ConfigurationCenter />);
     // action
@@ -150,7 +150,7 @@ describe("ConfigurationCenter scene links", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("expands the scene links table when its header is clicked", async () => {
+  it("should expand the scene links table when its header is clicked", async () => {
     // setup
     const user = userEvent.setup();
     render(<ConfigurationCenter />);

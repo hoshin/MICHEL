@@ -14,7 +14,7 @@ function MapSetup({
         <Input
           size={"small"}
           onChange={updateMapFormat}
-          defaultValue={mapFormat}
+          value={mapFormat ?? ""}
           style={{ width: "50%" }}
         />
       </Flex>
