@@ -14,7 +14,7 @@ export function TeamForm(props) {
           <img
             className="team-logo-img"
             src={props.teamLogo}
-            alt={`${props.side} team name`}
+            alt={`${props.side} team logo`}
           ></img>
           {props.teamBanLogo ? (
             <img
