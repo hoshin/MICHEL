@@ -4,6 +4,7 @@ import {
   DisconnectOutlined,
   LoginOutlined,
 } from "@ant-design/icons";
+import { Tooltip } from "antd";
 
 /**
  * Tiny diagnostic badge that pins the current WebSocket connection status
@@ -22,7 +23,7 @@ import {
  * <ConnectionBadge />
  * ```
  */
-function ConnectionBadge({ corner = "top-left" }) {
+function ConnectionBadge({ corner = "top-left", inline = false }) {
   const { status } = useTeamsData();
 
   const positionStyles = {
@@ -43,26 +44,44 @@ function ConnectionBadge({ corner = "top-left" }) {
     open: "#46a35e",
   };
 
-  return (
-    <div
-      style={{
+  // Inline mode lets the badge live inside a layout (e.g. the Config Center
+  // header) so it never overlaps page content. The fixed/overlay placement
+  // stays the default for OBS browser sources dropped onto a scene.
+  //
+  // The overlay variant disables pointer events so it never intercepts clicks
+  // meant for the page underneath; the inline variant must keep them enabled,
+  // otherwise the Tooltip never receives the hover that triggers it.
+  const placementStyle = inline
+    ? { position: "static" }
+    : {
         position: "fixed",
         zIndex: 9999,
-        padding: "4px 10px",
-        borderRadius: 4,
-        background: "rgba(0, 0, 0, 0.65)",
-        color: colorByStatus[status] ?? "#ffffff",
-        fontFamily:
-          "ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace",
-        fontSize: 12,
-        fontWeight: 600,
-        letterSpacing: 0.4,
         pointerEvents: "none",
         ...positionStyles[corner],
-      }}
+      };
+
+  return (
+    <Tooltip
+      placement="rightTop"
+      title={`Backend connection status: ${status}`}
     >
-      Backend connection: {iconByStatus[status]}
-    </div>
+      <div
+        style={{
+          ...placementStyle,
+          padding: "4px 10px",
+          borderRadius: 4,
+          color: colorByStatus[status] ?? "#ffffff",
+          fontFamily:
+            "ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: 0.4,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {iconByStatus[status]}
+      </div>
+    </Tooltip>
   );
 }
 

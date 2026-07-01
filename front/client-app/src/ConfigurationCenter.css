@@ -1,56 +1,88 @@
 #root {
   margin: 0;
-  padding: 1em;
+  padding: 0.75em;
   text-align: center;
 }
 
-.configuration-center-app {
+.config-dashboard {
   display: flex;
   flex-direction: column;
-  width: 580px;
-}
-
-.configuration-center-app section {
-  flex-direction: row;
-  display: flex;
-}
-
-.configuration-center-app section div.app-name {
-  display: flex;
-  flex-grow: 1;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.5em;
-}
-
-.main-interface {
-  display: flex;
-  flex-direction: row;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
   text-align: left;
-  justify-content: space-between;
-}
-.teams {
-  display: flex;
-  flex-direction: row;
-}
-.team1-form {
-  display: flex;
-  flex-direction: column;
-  margin-right: 2em;
-}
-.team2-form {
-  display: flex;
-  flex-direction: column;
 }
 
-.secondary-setup {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
+.dark-mode-toggle {
+  height: 14px;
+  line-height: 14px;
+  font-size: 11px;
+  gap: 6px;
+  user-select: none;
 }
 
-h1 {
-  font-size: 3.2em;
+/* antd's small Switch is ~16px tall; scale it down so the whole toggle line
+   stays within the requested 10-14px budget without clipping. */
+.dark-mode-toggle .ant-switch {
+  transform: scale(0.85);
+  transform-origin: right center;
+}
+
+.config-header {
+  margin-bottom: 2px;
+}
+
+.config-header .app-name {
+  font-weight: bold;
+  font-size: 1.4em;
+  letter-spacing: 0.04em;
+}
+
+.faceit-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.resync-notice {
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(70, 163, 94, 0.15);
+  color: #46a35e;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.teams-row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Shared label width for the small two-column form rows used across the
+   team / map / logo cards, so inputs line up regardless of label text. */
+.field-label {
+  width: 3.5rem;
+  flex-shrink: 0;
+}
+
+.timer-readout {
+  font-size: 1.6em;
+  font-weight: 800;
+  min-width: 4ch;
+  text-align: center;
+}
+
+.timer-color-note {
+  font-size: 0.85em;
+  color: #555;
+}
+
+.timer-color-note--default {
+  font-style: italic;
 }
 
 button {
@@ -60,7 +92,6 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #a1a1a1;
   cursor: pointer;
   transition: border-color 0.25s;
 }
@@ -81,26 +112,39 @@ a:hover {
   color: #535bf2;
 }
 
-.configuration-footer {
-  margin: 1rem;
-  padding: 0.5rem;
-  border: 1px solid slategray;
-  border-radius: 5px;
-  background-color: #a1a1a1;
-  height: 100px;
-}
-
-.configuration-footer div.line div:first-of-type {
-  width: 4rem;
-}
-
 .logo-preview {
   display: flex;
   flex-direction: row;
-  width: 50%;
+  align-items: center;
+  gap: 8px;
 }
 
 .logo-preview img {
-  width: 50%;
   object-fit: contain;
+}
+
+.logo-preview label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* Dark mode: antd's darkAlgorithm handles its own components, but the page
+   chrome (body background, plain text/labels) lives outside antd, so we drive
+   it from a body class toggled by the Configuration Center. */
+body.michel-dark {
+  background-color: #141414;
+}
+
+body.michel-dark,
+body.michel-dark .config-dashboard,
+body.michel-dark .app-name,
+body.michel-dark .field-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+body.michel-dark .timer-color-note {
+  color: rgba(255, 255, 255, 0.55);
 }

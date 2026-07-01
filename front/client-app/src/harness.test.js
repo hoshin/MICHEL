@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 describe("test configuration sanity check", () => {
-  it("runs a test file and resolves assertions", () => {
+  it("should run a test file and resolve assertions", () => {
     // setup
     const add = (a, b) => a + b;
     // action
