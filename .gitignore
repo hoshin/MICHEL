@@ -12,7 +12,10 @@ coverage
 /back/config.json*
 
 # front-specific
-/front/client-app/src/assets/custom
+# User drop-in assets live here and must stay untracked, but the folder itself
+# must exist (it is Vite's publicDir). Keep the directory via its .gitkeep.
+/front/client-app/src/assets/custom/*
+!/front/client-app/src/assets/custom/.gitkeep
 
 # electron-specific
 /electron-app/config.json
