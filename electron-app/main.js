@@ -3,6 +3,12 @@ const path = require('node:path')
 const { fork }  = require('child_process')
 const {Menu} = require("electron/main");
 const { loadConfig, saveConfig } = require('./config')
+const { applyLinuxGtkWorkaround } = require('./gtk')
+
+// Electron 36 defaults to GTK 4, which fails to open a window on many Linux
+// systems. Force GTK 3 before anything touches the window/GPU process so the
+// packaged app launches on a plain double-click.
+applyLinuxGtkWorkaround(app)
 
 // Live in-memory copy of the configuration. Replaced (not mutated) whenever
 // the user saves changes through the in-app settings, so that subsequent reads
