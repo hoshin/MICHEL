@@ -11,6 +11,8 @@
   "license": "CC-BY-NC",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "tests": "npm run tests:electron-app",
+    "tests:electron-app": "cd electron-app && npm run tests",
     "start:electron": "electron ./electron-app/main.js",
     "build:clean": "rimraf ./dist && rimraf release-builds",
     "build:back": "cd back && npm run build",
