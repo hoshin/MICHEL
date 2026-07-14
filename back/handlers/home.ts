@@ -87,6 +87,13 @@ let apiKey = process.env.FACEIT_KEY
 
 const FACEIT_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
 
+// Client-side idle timeout for FaceIt lookups. Without it, a FaceIt server
+// that accepts the connection but never responds (or stalls mid-body) would
+// leave the awaited request hanging indefinitely. 15s is generous for a
+// metadata lookup while still failing fast enough to fall through to the
+// authenticated fallback or give up.
+const FACEIT_HTTP_TIMEOUT_MS = 15000
+
 // since one could explicitly provide an empty key through env variables, the test to `undefined` was not accurate.
 // this is a laxer approach that will treat empty keys as falsy values and go to the fallback config file value in such a case
 const effectiveFaceItApiKey = () => process.env.FACEIT_KEY ? process.env.FACEIT_KEY : apiKey
@@ -511,6 +518,16 @@ export class MichelBackService {
             })
         })
 
+        // Node imposes no default socket timeout, so a FaceIt server that
+        // accepts the connection but never responds would leave this promise
+        // pending forever. Arm an idle timeout and destroy the request when it
+        // fires; destroy(err) re-emits 'error', which the handler below turns
+        // into the single rejection path.
+        request.setTimeout(FACEIT_HTTP_TIMEOUT_MS)
+        request.on('timeout', () => {
+            request.destroy(new Error(`FaceIt public request timed out after ${FACEIT_HTTP_TIMEOUT_MS} ms`))
+        })
+
         request.on('error', reject)
     })
 
@@ -525,7 +542,10 @@ export class MichelBackService {
             headers: {
                 'Authorization': `Bearer ${key}`,
                 'Accept': 'application/json',
-            }
+            },
+            // Same rationale as the public request: bound the wait so a stalled
+            // authenticated endpoint cannot hang the fallback indefinitely.
+            signal: AbortSignal.timeout(FACEIT_HTTP_TIMEOUT_MS),
         })
 
         if (response.status !== 200) {

@@ -10,6 +10,22 @@ jest.mock('https', () => ({
     get: fn(),
 }))
 
+// Mirrors the slice of https.ClientRequest the production code relies on: it
+// is an EventEmitter (for 'error'/'timeout') augmented with setTimeout and
+// destroy. destroy(err) re-emits 'error' with that error, exactly like Node's
+// real ClientRequest, so the single request.on('error', reject) funnel in the
+// source turns an idle timeout into a rejection.
+const createMockHttpsRequest = () => {
+    const request = new EventEmitter() as any
+    request.setTimeout = fn()
+    request.destroy = fn((error?: Error) => {
+        if (error) {
+            request.emit('error', error)
+        }
+    })
+    return request
+}
+
 describe('MichelBackService', () => {
     let michelBackService: MichelBackService
     const originalFaceItKey = process.env.FACEIT_KEY
@@ -66,7 +82,7 @@ describe('MichelBackService', () => {
                 callback(response)
                 response.emit('data', JSON.stringify(faceItMatchPayload))
                 response.emit('end')
-                return new EventEmitter() as any
+                return createMockHttpsRequest()
             }) as any)
             const fetchMock = spyOn(global, 'fetch')
 
@@ -110,7 +126,7 @@ describe('MichelBackService', () => {
                 callback(response)
                 response.emit('data', JSON.stringify({}))
                 response.emit('end')
-                return new EventEmitter() as any
+                return createMockHttpsRequest()
             }) as any)
             const expressJSONMock: Mock<any, any, any> = fn()
             const authenticatedFaceItResponse = {
@@ -156,7 +172,8 @@ describe('MichelBackService', () => {
                 headers: {
                     Authorization: 'Bearer faceit-api-key',
                     Accept: 'application/json',
-                }
+                },
+                signal: expect.any(AbortSignal),
             })
             expect(michelBackService.getSeriesData().team1).toMatchObject({
                 name: 'Authenticated Alpha',
@@ -186,7 +203,7 @@ describe('MichelBackService', () => {
                 callback(response)
                 response.emit('data', JSON.stringify({ payload: { teams: { faction1: { name: 'Only One Team' } } } }))
                 response.emit('end')
-                return new EventEmitter() as any
+                return createMockHttpsRequest()
             }) as any)
             const expressJSONMock: Mock<any, any, any> = fn()
             const authenticatedFaceItResponse = {
@@ -224,7 +241,7 @@ describe('MichelBackService', () => {
                 callback(response)
                 response.emit('data', JSON.stringify({}))
                 response.emit('end')
-                return new EventEmitter() as any
+                return createMockHttpsRequest()
             }) as any)
             const fetchMock = spyOn(global, 'fetch')
 
@@ -247,7 +264,7 @@ describe('MichelBackService', () => {
                 callback(response)
                 response.emit('data', JSON.stringify({}))
                 response.emit('end')
-                return new EventEmitter() as any
+                return createMockHttpsRequest()
             }) as any)
             const fetchMock = spyOn(global, 'fetch').mockResolvedValue({ status: 500 } as unknown as Response)
 
@@ -258,6 +275,95 @@ describe('MichelBackService', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1)
             expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
             expect(res.json).not.toHaveBeenCalled()
+        })
+
+        it('should arm a 15s idle timeout on the public request and destroy it when it fires', async () => {
+            // setup
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
+            let capturedRequest: any
+            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                capturedRequest = createMockHttpsRequest()
+                // Simulate FaceIt accepting the connection but never responding:
+                // the socket goes idle and the request emits 'timeout'. Deferred
+                // so the source has wired its 'timeout' listener by the time it
+                // fires (the listener is attached after https.get returns).
+                setImmediate(() => capturedRequest.emit('timeout'))
+                return capturedRequest
+            }) as any)
+            const fetchMock = spyOn(global, 'fetch')
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(capturedRequest.setTimeout).toHaveBeenCalledWith(15000)
+            expect(capturedRequest.destroy).toHaveBeenCalledWith(new Error('FaceIt public request timed out after 15000 ms'))
+            expect(fetchMock).not.toHaveBeenCalled()
+            expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
+            expect(res.json).not.toHaveBeenCalled()
+        })
+
+        it('should not update state if the authenticated fallback fetch times out', async () => {
+            // setup
+            process.env.FACEIT_KEY = 'faceit-api-key'
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
+            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                const response = new EventEmitter() as any
+                response.statusCode = 418
+                callback(response)
+                response.emit('data', JSON.stringify({}))
+                response.emit('end')
+                return createMockHttpsRequest()
+            }) as any)
+            // AbortSignal.timeout aborts fetch with a DOMException; model that
+            // rejection so we prove a timed-out authenticated call leaves state
+            // untouched rather than crashing.
+            const fetchMock = spyOn(global, 'fetch').mockRejectedValue(
+                new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+            )
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
+            expect(res.json).not.toHaveBeenCalled()
+        })
+
+        it('should fall back to the authenticated endpoint when the public request times out and a key is available', async () => {
+            // setup
+            process.env.FACEIT_KEY = 'faceit-api-key'
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
+            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                const request = createMockHttpsRequest()
+                setImmediate(() => request.emit('timeout'))
+                return request
+            }) as any)
+            const authenticatedFaceItResponse = {
+                status: 200,
+                json: fn<any>().mockResolvedValue({
+                    teams: {
+                        faction1: { name: 'Timeout Alpha', avatar: 'timeout-alpha-logo' },
+                        faction2: { name: 'Timeout Bravo', avatar: 'timeout-bravo-logo' },
+                    },
+                }),
+            } as unknown as Response
+            const fetchMock = spyOn(global, 'fetch').mockResolvedValue(authenticatedFaceItResponse)
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(michelBackService.getSeriesData().team1).toMatchObject({
+                name: 'Timeout Alpha',
+                logo: 'timeout-alpha-logo',
+            })
+            expect(michelBackService.getSeriesData().team2).toMatchObject({
+                name: 'Timeout Bravo',
+                logo: 'timeout-bravo-logo',
+            })
         })
     })
 
