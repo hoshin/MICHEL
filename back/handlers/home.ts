@@ -1,4 +1,5 @@
 import * as fs from "fs"
+import * as https from "https"
 import {Response} from "express"
 
 import pino from 'pino'
@@ -83,6 +84,10 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
 }
 
 let apiKey = process.env.FACEIT_KEY
+
+const FACEIT_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
+
+const effectiveFaceItApiKey = () => process.env.FACEIT_KEY !== undefined ? process.env.FACEIT_KEY : apiKey
 
 process.env.MICH_LOG_PATH='./'
 
@@ -478,61 +483,144 @@ export class MichelBackService {
         }
     }
 
-    initialMatchDataFromFaceItMatchId = (res: Response, matchId: string) => {
-        // this.logger.info('[MBA] initialMatchDataFromFaceItMatchId', matchId)
-        if (!matchId) {
-            return
+    private getJsonUsingNodeHttps = (url: string): Promise<any> => new Promise((resolve, reject) => {
+        const request = https.get(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': FACEIT_BROWSER_USER_AGENT,
+            },
+        }, response => {
+            let responseBody = ''
+
+            response.on('data', chunk => {
+                responseBody += chunk
+            })
+
+            response.on('end', () => {
+                if (response.statusCode !== 200) {
+                    reject(new Error(`Response status not 200 : ${response.statusCode}`))
+                    return
+                }
+
+                try {
+                    resolve(JSON.parse(responseBody))
+                } catch (error) {
+                    reject(error)
+                }
+            })
+        })
+
+        request.on('error', reject)
+    })
+
+    private getAuthenticatedFaceItMatchData = async (matchId: string): Promise<any> => {
+        const key = effectiveFaceItApiKey()
+        if (!key) {
+            throw new Error('No FaceIt API key available for authenticated fallback')
         }
-        return fetch(`https://open.faceit.com/data/v4/matches/${matchId}`, {
+
+        const response = await fetch(`https://open.faceit.com/data/v4/matches/${matchId}`, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
+                'Authorization': `Bearer ${key}`,
                 'Accept': 'application/json',
             }
         })
-            .then(response => {
-                if (response.status !== 200) {
-                    this.logger.info({msg:'[MBA] FaceIt status', status: response.status, json: JSON.stringify(response, null, 2)})
-                    return
-                }
-                response.json().then(jsonData => {
-                    // this.logger.info('[MBA] initialMatchDataFromFaceItMatchId', JSON.stringify(jsonData, null, 2))
-                    this.logger.info({
-                        msg: 'FaceIt match data querying',
-                        jsonData
-                    })
-                    if (jsonData?.teams) {
-                        const faction1 = jsonData.teams.faction1
-                        const faction2 = jsonData.teams.faction2
 
-                        this.seriesData.team1.name = faction1.name
-                        this.seriesData.team2.name = faction2.name
+        if (response.status !== 200) {
+            throw new Error(`Response status not 200 : ${response.status}`)
+        }
 
-                        this.seriesData.team1.logo = faction1.avatar
-                        this.seriesData.team2.logo = faction2.avatar
+        return response.json()
+    }
 
-                        this.seriesData.faceIt.matchId = matchId
-                        this.seriesData.faceIt.raw = jsonData
-                        this.logger.info({
-                            msg: '1st FaceIt match data querying (teams)',
-                            length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
-                            entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
-                            heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
-                            voting: this.seriesData?.faceIt?.raw?.voting,
-                            raw: this.seriesData?.faceIt?.raw
-                        })
-                    }
+    private normalizedPublicFaceItMatchData = (jsonData: any) => {
+        const matchData = jsonData?.payload
+        const faction1 = matchData?.teams?.faction1
+        const faction2 = matchData?.teams?.faction2
+        if (!faction1 || !faction2) {
+            throw new Error('Public FaceIt match data does not contain both teams')
+        }
 
-                    this.sendUpdatedStateToCaller(res)
-                    return this.seriesData
-                })
-                if (this.debug) {
-                    this.logger.info(`updateFromMatchId ${matchId}`)
-                }
-                return this.seriesData
+        const heroEntities = matchData?.matchCustom?.tree?.heroes?.values?.value ?? []
+        return {
+            raw: {
+                ...matchData,
+                voting: {
+                    ...matchData.voting,
+                    heroes: {
+                        ...matchData.voting?.heroes,
+                        entities: heroEntities,
+                    },
+                },
+            },
+            team1: faction1,
+            team2: faction2,
+        }
+    }
+
+    private normalizedAuthenticatedFaceItMatchData = (jsonData: any) => {
+        const faction1 = jsonData?.teams?.faction1
+        const faction2 = jsonData?.teams?.faction2
+        if (!faction1 || !faction2) {
+            throw new Error('Authenticated FaceIt match data does not contain both teams')
+        }
+
+        return {
+            raw: jsonData,
+            team1: faction1,
+            team2: faction2,
+        }
+    }
+
+    private getNormalizedFaceItMatchData = async (matchId: string) => {
+        try {
+            const publicJsonData = await this.getJsonUsingNodeHttps(`https://www.faceit.com/api/match/v2/match/${matchId}`)
+            return this.normalizedPublicFaceItMatchData(publicJsonData)
+        } catch (publicError) {
+            this.logger.info({msg:'[MBA] Public FaceIt match data query failed', error: publicError})
+            const authenticatedJsonData = await this.getAuthenticatedFaceItMatchData(matchId)
+            return this.normalizedAuthenticatedFaceItMatchData(authenticatedJsonData)
+        }
+    }
+
+    initialMatchDataFromFaceItMatchId = async (res: Response, matchId: string) => {
+        console.log('[MBA] initialMatchDataFromFaceItMatchId', matchId)
+        if (!matchId) {
+            return
+        }
+        try {
+            const faceItMatchData = await this.getNormalizedFaceItMatchData(matchId)
+            this.logger.info({
+                msg: 'FaceIt match data querying',
+                faceItMatchData
             })
-            .catch(error => this.seriesData)
-            .finally(() => this.seriesData)
+
+            this.seriesData.team1.name = faceItMatchData.team1.name
+            this.seriesData.team1.logo = faceItMatchData.team1.avatar
+            this.seriesData.team2.name = faceItMatchData.team2.name
+            this.seriesData.team2.logo = faceItMatchData.team2.avatar
+
+            this.seriesData.faceIt.matchId = matchId
+            this.seriesData.faceIt.raw = faceItMatchData.raw
+            this.logger.info({
+                msg: '1st FaceIt match data querying (teams)',
+                length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
+                entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
+                heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
+                voting: this.seriesData?.faceIt?.raw?.voting,
+                raw: this.seriesData?.faceIt?.raw
+            })
+
+            if (this.debug) {
+                this.logger.info(`updateFromMatchId ${matchId}`)
+            }
+            this.sendUpdatedStateToCaller(res)
+            return this.seriesData
+        } catch (error) {
+            this.logger.info({msg:'[MBA] FaceIt match data query failed', error})
+            return this.seriesData
+        }
     }
 
     increaseCustomCounter = (res: Response) => {
@@ -552,6 +640,7 @@ export class MichelBackService {
     }
 
     updatedLobbyDataFromFaceItMatchId = async (matchId: string, mapNumber: number, next: () => void) => {
+        console.log('[MBA] updatedLobbyDataFromFaceItMatchId', matchId, mapNumber)
         if (!matchId) {
             return
         }

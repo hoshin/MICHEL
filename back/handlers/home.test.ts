@@ -1,10 +1,262 @@
 import {fn, spyOn} from 'jest-mock'
 import {describe, expect, it} from '@jest/globals'
+import * as https from 'https'
+import {EventEmitter} from 'events'
 import {DEFAULT_SERIES_DATA, MichelBackService} from "./home";
 import {Response as ExpressResponse} from 'express'
 
+jest.mock('https', () => ({
+    get: jest.fn(),
+}))
+
 describe('MichelBackService', () => {
     let michelBackService: MichelBackService
+    const originalFaceItKey = process.env.FACEIT_KEY
+
+    describe('initialMatchDataFromFaceItMatchId', () => {
+        beforeEach(() => {
+            const connectionPool = []
+            jest.restoreAllMocks()
+            ;(global.fetch as any).mockRestore?.()
+            jest.mocked(https.get).mockReset()
+            process.env.FACEIT_KEY = ''
+            michelBackService = new MichelBackService(connectionPool, false)
+        })
+
+        afterAll(() => {
+            process.env.FACEIT_KEY = originalFaceItKey
+        })
+
+        it('should get team names and logos from the public FaceIt match endpoint', async () => {
+            // setup
+            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const faceItMatchPayload = {
+                payload: {
+                    teams: {
+                        faction1: {
+                            name: 'Moominhouse',
+                            avatar: 'https://distribution.faceit-cdn.net/moominhouse.jpg',
+                        },
+                        faction2: {
+                            name: 'ELMT Thunder',
+                            avatar: 'https://distribution.faceit-cdn.net/elmt-thunder.jpg',
+                        },
+                    },
+                    matchCustom: {
+                        tree: {
+                            heroes: {
+                                values: {
+                                    value: [
+                                        {
+                                            guid: '0x02E000000000007A',
+                                            name: 'DVa',
+                                            image_lg: 'https://assets.faceit-cdn.net/dva.jpeg',
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            }
+            const httpsGetMock = jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                const response = new EventEmitter() as any
+                response.statusCode = 200
+                callback(response)
+                response.emit('data', JSON.stringify(faceItMatchPayload))
+                response.emit('end')
+                return new EventEmitter() as any
+            }) as any)
+            const fetchMock = spyOn(global, 'fetch')
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(httpsGetMock).toHaveBeenCalledWith('https://www.faceit.com/api/match/v2/match/match-id', {
+                headers: {
+                    Accept: 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+                },
+            }, expect.any(Function))
+            expect(michelBackService.getSeriesData().team1).toMatchObject({
+                name: 'Moominhouse',
+                logo: 'https://distribution.faceit-cdn.net/moominhouse.jpg',
+            })
+            expect(michelBackService.getSeriesData().team2).toMatchObject({
+                name: 'ELMT Thunder',
+                logo: 'https://distribution.faceit-cdn.net/elmt-thunder.jpg',
+            })
+            expect(michelBackService.getSeriesData().faceIt.matchId).toStrictEqual('match-id')
+            expect(michelBackService.getSeriesData().faceIt.raw.voting.heroes.entities).toEqual([
+                {
+                    guid: '0x02E000000000007A',
+                    name: 'DVa',
+                    image_lg: 'https://assets.faceit-cdn.net/dva.jpeg',
+                },
+            ])
+            expect(fetchMock).not.toHaveBeenCalled()
+            expect(res.json).toHaveBeenCalledWith(michelBackService.getSeriesData())
+        })
+
+        it('should fallback to the authenticated FaceIt endpoint when the public endpoint fails and an API key is available', async () => {
+            // setup
+            process.env.FACEIT_KEY = 'faceit-api-key'
+            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const httpsGetMock = jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                const response = new EventEmitter() as any
+                response.statusCode = 418
+                callback(response)
+                response.emit('data', JSON.stringify({}))
+                response.emit('end')
+                return new EventEmitter() as any
+            }) as any)
+            const authenticatedFaceItResponse = {
+                status: 200,
+                json: jest.fn().mockResolvedValue({
+                    teams: {
+                        faction1: {
+                            name: 'Authenticated Alpha',
+                            avatar: 'https://distribution.faceit-cdn.net/auth-alpha.jpg',
+                        },
+                        faction2: {
+                            name: 'Authenticated Bravo',
+                            avatar: 'https://distribution.faceit-cdn.net/auth-bravo.jpg',
+                        },
+                    },
+                    voting: {
+                        heroes: {
+                            entities: [
+                                {
+                                    guid: 'hero-guid',
+                                    name: 'Ana',
+                                    image_lg: 'https://assets.faceit-cdn.net/ana.jpeg',
+                                },
+                            ],
+                        },
+                    },
+                }),
+            } as unknown as Response
+            const fetchMock = spyOn(global, 'fetch').mockResolvedValue(authenticatedFaceItResponse)
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(httpsGetMock).toHaveBeenCalledWith('https://www.faceit.com/api/match/v2/match/match-id', {
+                headers: {
+                    Accept: 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+                },
+            }, expect.any(Function))
+            expect(fetchMock).toHaveBeenCalledWith('https://open.faceit.com/data/v4/matches/match-id', {
+                method: 'GET',
+                headers: {
+                    Authorization: 'Bearer faceit-api-key',
+                    Accept: 'application/json',
+                }
+            })
+            expect(michelBackService.getSeriesData().team1).toMatchObject({
+                name: 'Authenticated Alpha',
+                logo: 'https://distribution.faceit-cdn.net/auth-alpha.jpg',
+            })
+            expect(michelBackService.getSeriesData().team2).toMatchObject({
+                name: 'Authenticated Bravo',
+                logo: 'https://distribution.faceit-cdn.net/auth-bravo.jpg',
+            })
+            expect(michelBackService.getSeriesData().faceIt.raw.voting.heroes.entities).toEqual([
+                {
+                    guid: 'hero-guid',
+                    name: 'Ana',
+                    image_lg: 'https://assets.faceit-cdn.net/ana.jpeg',
+                },
+            ])
+            expect(res.json).toHaveBeenCalledWith(michelBackService.getSeriesData())
+        })
+
+        it('should fallback to the authenticated FaceIt endpoint when the public payload does not contain both teams', async () => {
+            // setup
+            process.env.FACEIT_KEY = 'faceit-api-key'
+            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                const response = new EventEmitter() as any
+                response.statusCode = 200
+                callback(response)
+                response.emit('data', JSON.stringify({ payload: { teams: { faction1: { name: 'Only One Team' } } } }))
+                response.emit('end')
+                return new EventEmitter() as any
+            }) as any)
+            const authenticatedFaceItResponse = {
+                status: 200,
+                json: jest.fn().mockResolvedValue({
+                    teams: {
+                        faction1: { name: 'Fallback Alpha', avatar: 'fallback-alpha-logo' },
+                        faction2: { name: 'Fallback Bravo', avatar: 'fallback-bravo-logo' },
+                    },
+                }),
+            } as unknown as Response
+            const fetchMock = spyOn(global, 'fetch').mockResolvedValue(authenticatedFaceItResponse)
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(michelBackService.getSeriesData().team1).toMatchObject({
+                name: 'Fallback Alpha',
+                logo: 'fallback-alpha-logo',
+            })
+            expect(michelBackService.getSeriesData().team2).toMatchObject({
+                name: 'Fallback Bravo',
+                logo: 'fallback-bravo-logo',
+            })
+        })
+
+        it('should not update state if the public FaceIt match endpoint fails and no API key is available', async () => {
+            // setup
+            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                const response = new EventEmitter() as any
+                response.statusCode = 418
+                callback(response)
+                response.emit('data', JSON.stringify({}))
+                response.emit('end')
+                return new EventEmitter() as any
+            }) as any)
+            const fetchMock = spyOn(global, 'fetch')
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(fetchMock).not.toHaveBeenCalled()
+            expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
+            expect(res.json).not.toHaveBeenCalled()
+        })
+
+        it('should not update state if both public and authenticated FaceIt endpoints fail', async () => {
+            // setup
+            process.env.FACEIT_KEY = 'faceit-api-key'
+            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+                const response = new EventEmitter() as any
+                response.statusCode = 403
+                callback(response)
+                response.emit('data', JSON.stringify({}))
+                response.emit('end')
+                return new EventEmitter() as any
+            }) as any)
+            const fetchMock = spyOn(global, 'fetch').mockResolvedValue({ status: 500 } as unknown as Response)
+
+            // action
+            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+
+            // assert
+            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
+            expect(res.json).not.toHaveBeenCalled()
+        })
+    })
 
     describe('updatedLobbyDataFromFaceItMatchId', () => {
         beforeEach(() => {
