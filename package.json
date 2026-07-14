@@ -16,7 +16,7 @@
     "build:clean": "rimraf ./dist && rimraf release-builds",
     "build:back": "cd back && npm run build",
     "build:front": "cd front/client-app && npm run build",
-    "build:streamdeck-plugin": "cd stream-deck-plugin/michel-deck && npm run build-and-package:win",
+    "build:streamdeck-plugin": "cd stream-deck-plugin/michel-deck && npm run build-and-package",
     "prebuild:electron-app:win": "node ./electron-app/scripts/kill-running-app.cjs",
     "prebuild:electron-app:linux": "node ./electron-app/scripts/kill-running-app.cjs",
     "prebuild:electron-app:mac": "node ./electron-app/scripts/kill-running-app.cjs",
