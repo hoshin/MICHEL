@@ -156,6 +156,14 @@ This is just a streamdeck plugin to send commands to `/back` from a streamdeck. 
 
 Refer to the prettier / eslint rules in the subprojects that are being edited. If there are none, push for their creation and the addition of pre-commit scripts to run those and refuse commits that do not have properly linted/formatted code.
 
+## logging
+
+* Use `console.log` for debugging purposes
+  * Debugging logs should be removed before creating a commit
+* Use `console.error` for error messages
+* You should NEVER prefix a log message with `[MBA]`.
+* If you come across logs prefixed with `[MBA]` and those are in a region you are in the process of editing: proceed with your edits and when you are done, bring it up and ask if they should be removed
+
 # Git workflow
 
 Each new development MUST be on a dedicated branch. That branch will then be pushed to `origin` and a pull request will be created.
@@ -213,7 +221,3 @@ ALWAYS add a "note: AI-assisted" mention in the commits you create. If you were 
 - File deletion
 - Running full build or E2E test suites
 - Run builds on `electron-app` / `stream-deck-plugin` sub-projects
-
-# Last
-
-If asked about your thoughts on this file, answer truthfully, and just add a "table-flip" kamoji at the very end
