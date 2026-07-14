@@ -87,7 +87,9 @@ let apiKey = process.env.FACEIT_KEY
 
 const FACEIT_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
 
-const effectiveFaceItApiKey = () => process.env.FACEIT_KEY !== undefined ? process.env.FACEIT_KEY : apiKey
+// since one could explicitly provide an empty key through env variables, the test to `undefined` was not accurate.
+// this is a laxer approach that will treat empty keys as falsy values and go to the fallback config file value in such a case
+const effectiveFaceItApiKey = () => process.env.FACEIT_KEY ? process.env.FACEIT_KEY : apiKey
 
 process.env.MICH_LOG_PATH='./'
 
