@@ -4,9 +4,10 @@ import * as https from 'https'
 import {EventEmitter} from 'events'
 import {DEFAULT_SERIES_DATA, MichelBackService} from "./home";
 import {Response as ExpressResponse} from 'express'
+import Mock = jest.Mock;
 
 jest.mock('https', () => ({
-    get: jest.fn(),
+    get: fn(),
 }))
 
 describe('MichelBackService', () => {
@@ -29,7 +30,7 @@ describe('MichelBackService', () => {
 
         it('should get team names and logos from the public FaceIt match endpoint', async () => {
             // setup
-            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
             const faceItMatchPayload = {
                 payload: {
                     teams: {
@@ -102,7 +103,7 @@ describe('MichelBackService', () => {
         it('should fallback to the authenticated FaceIt endpoint when the public endpoint fails and an API key is available', async () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
-            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
             const httpsGetMock = jest.mocked(https.get).mockImplementation(((url, options, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 418
@@ -111,9 +112,10 @@ describe('MichelBackService', () => {
                 response.emit('end')
                 return new EventEmitter() as any
             }) as any)
+            const expressJSONMock: Mock<any, any, any> = fn()
             const authenticatedFaceItResponse = {
                 status: 200,
-                json: jest.fn().mockResolvedValue({
+                json: expressJSONMock.mockResolvedValue({
                     teams: {
                         faction1: {
                             name: 'Authenticated Alpha',
@@ -177,7 +179,7 @@ describe('MichelBackService', () => {
         it('should fallback to the authenticated FaceIt endpoint when the public payload does not contain both teams', async () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
-            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
             jest.mocked(https.get).mockImplementation(((url, options, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 200
@@ -186,9 +188,10 @@ describe('MichelBackService', () => {
                 response.emit('end')
                 return new EventEmitter() as any
             }) as any)
+            const expressJSONMock: Mock<any, any, any> = fn()
             const authenticatedFaceItResponse = {
                 status: 200,
-                json: jest.fn().mockResolvedValue({
+                json: expressJSONMock.mockResolvedValue({
                     teams: {
                         faction1: { name: 'Fallback Alpha', avatar: 'fallback-alpha-logo' },
                         faction2: { name: 'Fallback Bravo', avatar: 'fallback-bravo-logo' },
@@ -214,7 +217,7 @@ describe('MichelBackService', () => {
 
         it('should not update state if the public FaceIt match endpoint fails and no API key is available', async () => {
             // setup
-            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
             jest.mocked(https.get).mockImplementation(((url, options, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 418
@@ -237,7 +240,7 @@ describe('MichelBackService', () => {
         it('should not update state if both public and authenticated FaceIt endpoints fail', async () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
-            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
             jest.mocked(https.get).mockImplementation(((url, options, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 403
@@ -365,7 +368,7 @@ describe('MichelBackService', () => {
             // setup
             const michelBackService = new MichelBackService([], false)
             const res: ExpressResponse = {
-                json: jest.fn()
+                json: fn()
             } as unknown as ExpressResponse
             // action
             michelBackService.sendUpdatedStateToCaller(res)
@@ -403,7 +406,7 @@ describe('MichelBackService', () => {
         })
         it('should send a message through the connection pool with the current seriesData to all connected clients (WebSocket)', () => {
             // setup
-            const sendStub = jest.fn()
+            const sendStub = fn()
             const connectionPool = [
                 {send: sendStub},
                 {send: sendStub}
@@ -539,7 +542,7 @@ describe('MichelBackService', () => {
             // setup
             const michelBackService = new MichelBackService([], false)
             const sendUpdatedStateStub = jest.spyOn(michelBackService, 'sendUpdatedStateToCaller').mockImplementation(() => {})
-            const res: ExpressResponse = { json: jest.fn() } as unknown as ExpressResponse
+            const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
 
             // action
             michelBackService.swapTeams(res)
@@ -550,7 +553,7 @@ describe('MichelBackService', () => {
 
         it('should broadcast the updated state to all WebSocket clients after swapping', () => {
             // setup
-            const sendStub = jest.fn()
+            const sendStub: Mock<any, any, any> = fn()
             const connectionPool = [{ send: sendStub }, { send: sendStub }]
             const michelBackService = new MichelBackService(connectionPool, false)
 
