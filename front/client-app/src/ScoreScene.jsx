@@ -16,12 +16,10 @@ function ScoreScene() {
     name: team2Name,
     logo: team2Logo,
   } = teamsData.team2;
-  const { right, mapCount, mapFormat, tournamentLogo, optionalLogoDisplay } =
-    teamsData.display;
+  const { right, tournamentLogo, optionalLogoDisplay } = teamsData.display;
   const logo = tournamentLogo.startsWith("faceit")
     ? FACEIT_LOGO
     : (tournamentLogo ?? DEFAULT_LOGO);
-  console.log(logo, optionalLogoDisplay, tournamentLogo);
   const originalOrder = right === "team1";
   return (
     <div style={{ padding: "10em" }}>
