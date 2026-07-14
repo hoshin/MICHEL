@@ -282,7 +282,9 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch').mockResolvedValue(
                 mockedFetchResponse
             )
-            const errorSpy = spyOn(console, 'error').mockImplementation(() => {
+            // const errorSpy = spyOn(console, 'error').mockImplementation(() => {
+            // })
+            const errorSpy = spyOn((michelBackService as any).logger, 'error').mockImplementation(() => {
             })
             // action
             await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
@@ -292,7 +294,7 @@ describe('MichelBackService', () => {
                     "Accept": "application/json",
                 }, "method": "GET"
             })
-            expect(errorSpy).toHaveBeenCalledWith('Could not update lobby data using FaceIt match id match-id', new Error('Response status not 200 : 418'))
+            expect(errorSpy).toHaveBeenCalledWith({ msg: 'Could not update lobby data using FaceIt match id match-id', error: 'Response status not 200 : 418'})
             expect(nextMock).toHaveBeenCalled()
         })
     })

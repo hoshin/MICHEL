@@ -139,8 +139,7 @@ export class MichelBackService {
                 this.seriesData = jsonSeriesConfigurationFromFile
             }
         } catch (error) {
-            console.warn('No config file found! Initializing seriesData with default values.')
-            console.warn(error.message)
+            this.logger.warn({ msg: 'No config file found! Initializing seriesData with default values.', error: error.message})
         }
     }
 
@@ -256,7 +255,7 @@ export class MichelBackService {
         if (this.connectionPool) {
             const connectionPoolWithonlyUnclosedSockets = this.connectionPool.filter(socket => !socket._closeFrameReceived)
             if (this.connectionPool.length !== connectionPoolWithonlyUnclosedSockets.length) {
-                console.info(`Connection pool cleanup (remove closing / closed sockets): Base - ${this.connectionPool.length} => New - ${connectionPoolWithonlyUnclosedSockets.length}`)
+                this.logger.info({ msg: `Connection pool cleanup (remove closing / closed sockets): Base - ${this.connectionPool.length} => New - ${connectionPoolWithonlyUnclosedSockets.length}`})
                 this.connectionPool = connectionPoolWithonlyUnclosedSockets
             }
 
@@ -585,7 +584,6 @@ export class MichelBackService {
     }
 
     initialMatchDataFromFaceItMatchId = async (res: Response, matchId: string) => {
-        console.log('[MBA] initialMatchDataFromFaceItMatchId', matchId)
         if (!matchId) {
             return
         }
@@ -640,7 +638,6 @@ export class MichelBackService {
     }
 
     updatedLobbyDataFromFaceItMatchId = async (matchId: string, mapNumber: number, next: () => void) => {
-        console.log('[MBA] updatedLobbyDataFromFaceItMatchId', matchId, mapNumber)
         if (!matchId) {
             return
         }
@@ -668,12 +665,8 @@ export class MichelBackService {
                 // mapNumber => [1, +Infinity[
                 if (heroVotingPerMap?.[mapNumber - 1] !== undefined) {
                     const votesForMap = heroVotingPerMap[mapNumber - 1]
-                    // ?
-                    console.log('votesForMap', {
-                        votesForMap,
-                    })
                     if (!votesForMap.entities || votesForMap.entities.length <= 0) {
-                        console.log('votesForMap has no entities')
+                        this.logger.info({ msg: 'votesForMap has no entities'})
                         return
                     }
                     const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
@@ -681,22 +674,22 @@ export class MichelBackService {
                         selected_by: bannedPick.selected_by,
                         round: bannedPick.round,
                     }))
-                    console.log({
+                    this.logger.info({
                         msg: 'list of banned heroes',
                         bannedHeroes: bannedHeroes,
                     })
                     // this.logger.info(`[MBA] bannedHeroes ${mapNumber}`, JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities, null, 2))
                     const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
-                    console.log({
+                    this.logger.info({
                         msg: 'list of guids to lookup',
-                        bannedHeroes: bannedHeroes,
+                        heroesGuidsToLookup: heroesGuidsToLookup,
                     })
                     // this.logger.info('[MBA] bannedHeroes data', JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid)), null, 2))
                     let filteredHeroDataForMap
                     try{
                         if(!this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
                             // force lookup
-                            console.log({
+                            this.logger.info({
                                 msg: 'Not all required data for votes is present => requerying',
                                     length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
                                     entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
@@ -710,13 +703,13 @@ export class MichelBackService {
                         }
                         if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
                             filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
-                            console.log('have a list of heroes we can filter for target map', {
+                            this.logger.info({msg:'have a list of heroes we can filter for target map',
                                 filteredHeroes: filteredHeroDataForMap,
                             })
                         }
-                        console.log('filteredHeroDataForMap END, hopefully we hit an update branch before')
+                        this.logger.info({msg:'filteredHeroDataForMap END, hopefully we hit an update branch before'})
                     } catch (error){
-                        console.error({msg:'Attempted to get filteredHeroDataForMap and crashed', error})
+                        this.logger.error({msg:'Attempted to get filteredHeroDataForMap and crashed', error: error.message})
                         next()
                     }
                     const team1Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction1')[0]
@@ -725,15 +718,6 @@ export class MichelBackService {
                     // this.logger.info('[MBA] filteredHeroDataForMap', JSON.stringify(filteredHeroDataForMap, null, 2))
                     const heroDataForTeam1Ban = filteredHeroDataForMap.filter(ban => team1Ban.guid === ban.guid)[0]
                     const heroDataForTeam2Ban = filteredHeroDataForMap.filter(ban => team2Ban.guid === ban.guid)[0]
-                    console.log('BANS?', {
-                        jsonData:
-                        bannedHeroes,
-                        filteredHeroDataForMap,
-                        team1Ban,
-                        team2Ban,
-                        heroDataForTeam1Ban,
-                        heroDataForTeam2Ban
-                    })
                     if (heroDataForTeam1Ban && heroDataForTeam2Ban) {
                         this.seriesData.standings[`match${mapNumber}`] = {
                             bans: {
@@ -752,13 +736,12 @@ export class MichelBackService {
                 next()
             })
                 .catch(error => {
-                    console.error('Error fetching faceit match details (bans)')
-                    console.error(error)
+                    this.logger.error({ msg: 'Error fetching faceit match details (bans)', error: error.message})
                     next()
                 })
         })
         .catch(error => {
-            console.error(`Could not update lobby data using FaceIt match id ${matchId}`, error)
+            this.logger.error({ msg:`Could not update lobby data using FaceIt match id ${matchId}`, error: error.message})
             next()
         })
     }
@@ -767,7 +750,6 @@ export class MichelBackService {
         try {
             if (this.seriesData?.faceIt?.matchId.length > 0) {
                 this.updatedLobbyDataFromFaceItMatchId(this.seriesData?.faceIt?.matchId, mapNumber, () => {
-                    // console.log('next called')
                     this.sendUpdatedStateToCaller(res)
                 })
             } else {
@@ -775,7 +757,7 @@ export class MichelBackService {
                 this.sendUpdatedStateToCaller(res)
             }
         } catch (error) {
-            console.error('Error fetching faceIt match updates:', error.message)
+            this.logger.error( {msg:'Error fetching faceIt match updates:', error: error.message})
             this.sendUpdatedStateToCaller(res)
         }
     }
