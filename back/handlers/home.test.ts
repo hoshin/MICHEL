@@ -8,7 +8,13 @@ import Mock = jest.Mock;
 import {Logger} from "pino";
 
 jest.mock('https', () => ({
-    get: jest.fn(),
+    get: jest.fn().mockReturnValue(
+        {
+            setTimeout: fn,
+            destroy: fn,
+            on: fn,
+        }
+    ),
 }))
 
 // Mirrors the slice of https.ClientRequest the production code relies on: it
@@ -527,7 +533,8 @@ describe('MichelBackService', () => {
                 },
             }
 
-            let releaseMatchData: () => void = () => {}
+            let releaseMatchData: () => void = () => {
+            }
             const matchDataReleased = new Promise<void>((resolve) => {
                 releaseMatchData = resolve
             })
@@ -1097,6 +1104,123 @@ describe('MichelBackService', () => {
             })
             svc.handleCommand(Buffer.from(JSON.stringify({command: 'setMapCount', value: 7})))
             expect(setSpy).toHaveBeenCalledWith(null, 7)
+        })
+
+        const MATCH_ID = '1-9f898257-b66c-4a72-9295-1b6aef2cb672'
+
+        it('should extract the match id if a FaceIt room url was given, instead of a match ID', () => {
+            // setup
+            const svc = new MichelBackService([], false)
+            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
+                payload: {
+                    teams: {faction1: {}, faction2: {}}
+                }
+            })
+            // action
+            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}`)
+            // assert
+            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+        })
+        it('should be able to use a bare match id if provided', () => {
+            // setup
+            const svc = new MichelBackService([], false)
+            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
+                payload: {
+                    teams: {faction1: {}, faction2: {}}
+                }
+            })
+            // action
+            svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
+            // assert
+            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+        })
+        it('should extract the match id from a url with a trailing slash', () => {
+            // setup
+            const svc = new MichelBackService([], false)
+            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
+                payload: {
+                    teams: {faction1: {}, faction2: {}}
+                }
+            })
+            // action
+            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/`)
+            // assert
+            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+        })
+        it('should extract the match id from a url with a scoreboard suffix', () => {
+            // setup
+            const svc = new MichelBackService([], false)
+            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
+                payload: {
+                    teams: {faction1: {}, faction2: {}}
+                }
+            })
+            // action
+            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/scoreboard`)
+            // assert
+            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+        })
+        it('should extract the match id from a url carrying a query string', () => {
+            // setup
+            const svc = new MichelBackService([], false)
+            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
+                payload: {
+                    teams: {faction1: {}, faction2: {}}
+                }
+            })
+            // action
+            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}?foo=bar`)
+            // assert
+            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+        })
+        it('should extract the match id from a url carrying a hash fragment', () => {
+            // setup
+            const svc = new MichelBackService([], false)
+            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
+                payload: {
+                    teams: {faction1: {}, faction2: {}}
+                }
+            })
+            // action
+            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}#scoreboard`)
+            // assert
+            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+        })
+
+        const seriesDataWithStaleStandings = (): SeriesData => ({
+            ...structuredClone(DEFAULT_SERIES_DATA),
+            standings: {
+                match1: {bans: {team1: {heroImage: 'stale-hero'} as any, team2: {} as any}}
+            }
+        })
+
+        it('should wipe stale standings from a previous match once the new match data resolves', async () => {
+            // setup
+            const svc = new MichelBackService([], false, seriesDataWithStaleStandings())
+            jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
+            })
+            spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
+                payload: {teams: {faction1: {name: 'A'}, faction2: {name: 'B'}}}
+            })
+            // action
+            await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
+            // assert
+            expect(svc.getSeriesData().standings).toEqual({})
+        })
+
+        it('should wipe stale standings even when the new match fetch fails', async () => {
+            // setup
+            const svc = new MichelBackService([], false, seriesDataWithStaleStandings())
+            jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
+            })
+            jest.spyOn(global, 'fetch').mockResolvedValue({status: 418, json: () => Promise.resolve({})} as Response)
+            spyOn(svc as any, 'getJsonUsingNodeHttps').mockRejectedValue({
+                status: 418,
+            })
+            // action
+            await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
+            // assert
+            expect(svc.getSeriesData().standings).toEqual({})
         })
     })
 

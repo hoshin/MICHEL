@@ -29,7 +29,7 @@ import { PlayCircleOutlined, PauseCircleOutlined } from "@ant-design/icons";
 export function copyURI(evt) {
   evt.preventDefault();
 
-  if(typeof navigator?.clipboard?.writeText !== "function"){
+  if (typeof navigator?.clipboard?.writeText !== "function") {
     notification.open({
       message: "Clipboard not supported",
       description: "Your browser does not support copying to the clipboard.",
@@ -348,6 +348,17 @@ function ConfigurationCenter() {
   const [faceItModeEnabled, setFaceItMode] = useFaceItMode(faceIt);
   const [darkModeEnabled, setDarkMode] = useDarkMode();
 
+  // Locally control the match ID field so typing/pasting stays smooth, while still
+  // reflecting any value the backend sends back (e.g. the id parsed out of a pasted room URL).
+  const [matchIdInput, setMatchIdInput] = useState(faceIt?.matchId ?? "");
+  useEffect(() => {
+    setMatchIdInput(faceIt?.matchId ?? "");
+  }, [faceIt?.matchId]);
+  const handleMatchIdChange = (event) => {
+    setMatchIdInput(event.target.value);
+    send({ command: "updateFromMatchId", value: event.target.value });
+  };
+
   // Drive the page-level background/text off a body class so the dark theme
   // covers the full viewport, not just the antd-styled cards. Cleaned up on
   // unmount so other routes (the OBS overlays) are never left dark.
@@ -519,11 +530,22 @@ function ConfigurationCenter() {
           <Card size={"small"} title={"FaceIt Configuration"}>
             <Flex justify={"space-between"} align={"flex-end"} gap={"small"}>
               <Flex vertical style={{ flex: 1 }}>
-                <div>FaceIt match ID</div>
+                <Flex style={{ gap: "10px" }}>
+                  <div>FaceIt match ID</div>
+                  {faceIt?.matchId ? (
+                    <a
+                      href={`https://www.faceit.com/en/ow2/room/${faceIt.matchId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open in FaceIt
+                    </a>
+                  ) : null}
+                </Flex>
                 <Input
                   size={"small"}
-                  onChange={sendCommandHandler("updateFromMatchId")}
-                  defaultValue={faceIt?.matchId}
+                  onChange={handleMatchIdChange}
+                  value={matchIdInput}
                 />
               </Flex>
               <Button

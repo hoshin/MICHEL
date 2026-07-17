@@ -492,6 +492,12 @@ export class MichelBackService {
         }
     }
 
+    private extractFaceItMatchId = (matchIdOrURL: string): string => {
+        const withoutQueryOrHash = matchIdOrURL.split(/[?#]/)[0]
+        const segments = withoutQueryOrHash.split('/').filter(segment => segment.length > 0)
+        return segments.find(segment => /^\d+-[0-9a-f-]+$/i.test(segment)) ?? segments.pop() ?? ''
+    }
+
     /**
      * Every FaceIt call goes through this single Node https.get client.
      * The www.faceit.com match endpoint looks gated by a WAF that inspects BOTH the User-Agent
@@ -605,10 +611,15 @@ export class MichelBackService {
         }
     }
 
-    initialMatchDataFromFaceItMatchId = async (res: Response, matchId: string) => {
-        if (!matchId) {
+    initialMatchDataFromFaceItMatchId = async (res: Response, matchIdOrURL: string) => {
+        if (!matchIdOrURL) {
             return
         }
+        // if we are hopping to a new match, or just initializing, we don't want any remnants of a previous match
+        // (like bans) to stay in the standings, even if the fetch below ends up failing
+        this.seriesData.standings = structuredClone(DEFAULT_SERIES_DATA.standings)
+        const matchId: string = this.extractFaceItMatchId(matchIdOrURL)
+
         try {
             const faceItMatchData = await this.getNormalizedFaceItMatchData(matchId)
             this.logger.info({

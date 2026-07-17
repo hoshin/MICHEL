@@ -97,6 +97,82 @@ describe("ConfigurationCenter FaceIt mode", () => {
   });
 });
 
+describe("ConfigurationCenter FaceIt match id field", () => {
+  // The label lives in a header Flex; the Input sits alongside it inside the
+  // wrapping vertical Flex, so we climb two levels to reach their shared parent.
+  const matchIdInput = () =>
+    within(
+      screen.getByText("FaceIt match ID").parentElement.parentElement,
+    ).getByRole("textbox");
+
+  it("should display the match id currently held by the back-end", () => {
+    // setup
+    teamsDataMock.mockReturnValue(
+      buildHookValue({ faceIt: { matchId: "match-123" } }),
+    );
+    // action
+    render(<ConfigurationCenter />);
+    // assert
+    expect(matchIdInput()).toHaveValue("match-123");
+  });
+
+  it("should reflect a match id that only arrives from the back-end after the first render", () => {
+    // setup
+    teamsDataMock.mockReturnValue(
+      buildHookValue({ faceIt: { matchId: "match-123" } }),
+    );
+    const { rerender } = render(<ConfigurationCenter />);
+    // action — the back-end parses a pasted URL down to a bare id and pushes it back
+    teamsDataMock.mockReturnValue(
+      buildHookValue({ faceIt: { matchId: "match-456" } }),
+    );
+    rerender(<ConfigurationCenter />);
+    // assert
+    expect(matchIdInput()).toHaveValue("match-456");
+  });
+
+  it("should send the updateFromMatchId command as the operator types", async () => {
+    // setup
+    const user = userEvent.setup();
+    const hookValue = buildHookValue({ faceIt: { matchId: "" } });
+    teamsDataMock.mockReturnValue(hookValue);
+    render(<ConfigurationCenter />);
+    await user.click(screen.getByRole("switch", { name: "FaceIt mode" }));
+    // action
+    await user.type(matchIdInput(), "x");
+    // assert
+    expect(hookValue.send).toHaveBeenCalledWith({
+      command: "updateFromMatchId",
+      value: "x",
+    });
+  });
+
+  it("should not render the 'Open in FaceIt' link when no match id is set", async () => {
+    // setup
+    const user = userEvent.setup();
+    teamsDataMock.mockReturnValue(buildHookValue({ faceIt: { matchId: "" } }));
+    render(<ConfigurationCenter />);
+    await user.click(screen.getByRole("switch", { name: "FaceIt mode" }));
+    // assert
+    expect(
+      screen.queryByRole("link", { name: "Open in FaceIt" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("should point the 'Open in FaceIt' link at the room for the current match id", () => {
+    // setup
+    teamsDataMock.mockReturnValue(
+      buildHookValue({ faceIt: { matchId: "match-123" } }),
+    );
+    // action
+    render(<ConfigurationCenter />);
+    // assert
+    expect(
+      screen.getByRole("link", { name: "Open in FaceIt" }),
+    ).toHaveAttribute("href", "https://www.faceit.com/en/ow2/room/match-123");
+  });
+});
+
 describe("ConfigurationCenter dark mode", () => {
   it("should default to light mode (toggle off, no dark body class)", () => {
     // setup / action
