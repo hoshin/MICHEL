@@ -406,6 +406,28 @@ describe('MichelBackService', () => {
             expect(errorSpy).toHaveBeenCalledWith({ msg: 'Could not update lobby data using FaceIt match id match-id', error: 'Response status not 200 : 418'})
             expect(nextMock).toHaveBeenCalled()
         })
+        it('should still call next when the votes for the map have no entities', async () => {
+            // setup
+            const nextMock = fn()
+            const mockedFetchResponse = {
+                status: 200,
+                json: () => Promise.resolve({
+                    payload: {
+                        tickets: [
+                            {
+                                entity_type: 'heroes',
+                                entities: []
+                            }
+                        ]
+                    }
+                })
+            } as unknown as Response
+            spyOn(global, 'fetch').mockResolvedValue(mockedFetchResponse)
+            // action
+            await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
+            // assert
+            expect(nextMock).toHaveBeenCalled()
+        })
     })
     describe('teamUpdateBan', () => {
         it('should update Team1 ban for round 2 if current round is 2 and selected team is team 1', () => {

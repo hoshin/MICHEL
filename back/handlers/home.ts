@@ -685,12 +685,12 @@ export class MichelBackService {
                     heroVotingForCurrentMap: heroVotingPerMap?.[mapNumber -1]
                 })
                 // mapNumber => [1, +Infinity[
-                if (heroVotingPerMap?.[mapNumber - 1] !== undefined) {
-                    const votesForMap = heroVotingPerMap[mapNumber - 1]
-                    if (!votesForMap.entities || votesForMap.entities.length <= 0) {
-                        this.logger.info({ msg: 'votesForMap has no entities'})
-                        return
-                    }
+                const votesForMap = heroVotingPerMap?.[mapNumber - 1]
+                const votesForMapHasEntities = votesForMap?.entities && votesForMap.entities.length > 0
+                if (votesForMap !== undefined && !votesForMapHasEntities) {
+                    this.logger.info({ msg: 'votesForMap has no entities'})
+                }
+                if (votesForMapHasEntities) {
                     const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
                         guid: bannedPick.guid,
                         selected_by: bannedPick.selected_by,
