@@ -482,7 +482,7 @@ export class MichelBackService {
 
     updateMapCountAndRefreshFaceItDataIfNeeded = (res: Response, increment: number = 1) => {
         const candidate = this.seriesData.display.mapCount + increment
-        this.logger.info({msg: '[MBA] updateMapCountAndRefreshFaceItDataIfNeeded', mapCount: this.seriesData.display.mapCount})
+        this.logger.debug({msg: 'updateMapCountAndRefreshFaceItDataIfNeeded', mapCount: this.seriesData.display.mapCount})
         if (candidate === this.seriesData.display.mapCount) {
             this.sendUpdatedStateToCaller(res)
         } else {
@@ -609,7 +609,7 @@ export class MichelBackService {
             const publicJsonData = await this.getJsonUsingNodeHttps(`https://www.faceit.com/api/match/v2/match/${matchId}`)
             return this.normalizedPublicFaceItMatchData(publicJsonData)
         } catch (publicError) {
-            this.logger.info({msg:'[MBA] Public FaceIt match data query failed', error: publicError})
+            this.logger.error({msg:'Public FaceIt match data query failed', error: publicError})
             const authenticatedJsonData = await this.getAuthenticatedFaceItMatchData(matchId)
             return this.normalizedAuthenticatedFaceItMatchData(authenticatedJsonData)
         }
@@ -648,7 +648,7 @@ export class MichelBackService {
             this.sendUpdatedStateToCaller(res)
             return this.seriesData
         } catch (error) {
-            this.logger.info({msg:'[MBA] FaceIt match data query failed', error})
+            this.logger.error({msg:'FaceIt match data query failed', error})
             return this.seriesData
         }
     }
