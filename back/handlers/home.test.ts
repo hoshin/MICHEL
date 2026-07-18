@@ -26,6 +26,35 @@ const createMockHttpsRequest = () => {
     return request
 }
 
+// After consolidating every FaceIt call onto https.get, a single test may see
+// several https.get invocations to different hosts (public match endpoint then
+// the authenticated fallback). This routes each call to a canned response
+// keyed by a substring of the URL, so tests stay declarative instead of
+// hand-rolling call-count branching inside the mock.
+type CannedHttpsResponse = {
+    statusCode: number
+    body: unknown
+    timeout?: boolean
+}
+const mockHttpsByUrl = (routes: Array<{ match: string } & CannedHttpsResponse>) =>
+    jest.mocked(https.get).mockImplementation(((url: string, _options: any, callback: any) => {
+        const route = routes.find((candidate) => url.includes(candidate.match))
+        if (!route) {
+            throw new Error(`mockHttpsByUrl: no canned response for ${url}`)
+        }
+        const request = createMockHttpsRequest()
+        if (route.timeout) {
+            setImmediate(() => request.emit('timeout'))
+            return request
+        }
+        const response = new EventEmitter() as any
+        response.statusCode = route.statusCode
+        callback(response)
+        response.emit('data', typeof route.body === 'string' ? route.body : JSON.stringify(route.body))
+        response.emit('end')
+        return request
+    }) as any)
+
 describe('MichelBackService', () => {
     let michelBackService: MichelBackService
     const originalFaceItKey = process.env.FACEIT_KEY
@@ -120,42 +149,37 @@ describe('MichelBackService', () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
             const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
-            const httpsGetMock = jest.mocked(https.get).mockImplementation(((url, options, callback) => {
-                const response = new EventEmitter() as any
-                response.statusCode = 418
-                callback(response)
-                response.emit('data', JSON.stringify({}))
-                response.emit('end')
-                return createMockHttpsRequest()
-            }) as any)
-            const expressJSONMock: Mock<any, any, any> = fn()
-            const authenticatedFaceItResponse = {
-                status: 200,
-                json: expressJSONMock.mockResolvedValue({
-                    teams: {
-                        faction1: {
-                            name: 'Authenticated Alpha',
-                            avatar: 'https://distribution.faceit-cdn.net/auth-alpha.jpg',
+            const httpsGetMock = mockHttpsByUrl([
+                { match: 'www.faceit.com/api/match/v2', statusCode: 418, body: {} },
+                {
+                    match: 'open.faceit.com/data/v4/matches',
+                    statusCode: 200,
+                    body: {
+                        teams: {
+                            faction1: {
+                                name: 'Authenticated Alpha',
+                                avatar: 'https://distribution.faceit-cdn.net/auth-alpha.jpg',
+                            },
+                            faction2: {
+                                name: 'Authenticated Bravo',
+                                avatar: 'https://distribution.faceit-cdn.net/auth-bravo.jpg',
+                            },
                         },
-                        faction2: {
-                            name: 'Authenticated Bravo',
-                            avatar: 'https://distribution.faceit-cdn.net/auth-bravo.jpg',
-                        },
-                    },
-                    voting: {
-                        heroes: {
-                            entities: [
-                                {
-                                    guid: 'hero-guid',
-                                    name: 'Ana',
-                                    image_lg: 'https://assets.faceit-cdn.net/ana.jpeg',
-                                },
-                            ],
+                        voting: {
+                            heroes: {
+                                entities: [
+                                    {
+                                        guid: 'hero-guid',
+                                        name: 'Ana',
+                                        image_lg: 'https://assets.faceit-cdn.net/ana.jpeg',
+                                    },
+                                ],
+                            },
                         },
                     },
-                }),
-            } as unknown as Response
-            const fetchMock = spyOn(global, 'fetch').mockResolvedValue(authenticatedFaceItResponse)
+                },
+            ])
+            const fetchMock = spyOn(global, 'fetch')
 
             // action
             await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
@@ -167,14 +191,14 @@ describe('MichelBackService', () => {
                     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
                 },
             }, expect.any(Function))
-            expect(fetchMock).toHaveBeenCalledWith('https://open.faceit.com/data/v4/matches/match-id', {
-                method: 'GET',
+            expect(httpsGetMock).toHaveBeenCalledWith('https://open.faceit.com/data/v4/matches/match-id', {
                 headers: {
-                    Authorization: 'Bearer faceit-api-key',
                     Accept: 'application/json',
+                    Authorization: 'Bearer faceit-api-key',
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
                 },
-                signal: expect.any(AbortSignal),
-            })
+            }, expect.any(Function))
+            expect(fetchMock).not.toHaveBeenCalled()
             expect(michelBackService.getSeriesData().team1).toMatchObject({
                 name: 'Authenticated Alpha',
                 logo: 'https://distribution.faceit-cdn.net/auth-alpha.jpg',
@@ -197,31 +221,30 @@ describe('MichelBackService', () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
             const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
-            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
-                const response = new EventEmitter() as any
-                response.statusCode = 200
-                callback(response)
-                response.emit('data', JSON.stringify({ payload: { teams: { faction1: { name: 'Only One Team' } } } }))
-                response.emit('end')
-                return createMockHttpsRequest()
-            }) as any)
-            const expressJSONMock: Mock<any, any, any> = fn()
-            const authenticatedFaceItResponse = {
-                status: 200,
-                json: expressJSONMock.mockResolvedValue({
-                    teams: {
-                        faction1: { name: 'Fallback Alpha', avatar: 'fallback-alpha-logo' },
-                        faction2: { name: 'Fallback Bravo', avatar: 'fallback-bravo-logo' },
+            mockHttpsByUrl([
+                {
+                    match: 'www.faceit.com/api/match/v2',
+                    statusCode: 200,
+                    body: { payload: { teams: { faction1: { name: 'Only One Team' } } } },
+                },
+                {
+                    match: 'open.faceit.com/data/v4/matches',
+                    statusCode: 200,
+                    body: {
+                        teams: {
+                            faction1: { name: 'Fallback Alpha', avatar: 'fallback-alpha-logo' },
+                            faction2: { name: 'Fallback Bravo', avatar: 'fallback-bravo-logo' },
+                        },
                     },
-                }),
-            } as unknown as Response
-            const fetchMock = spyOn(global, 'fetch').mockResolvedValue(authenticatedFaceItResponse)
+                },
+            ])
+            const fetchMock = spyOn(global, 'fetch')
 
             // action
             await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
 
             // assert
-            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(fetchMock).not.toHaveBeenCalled()
             expect(michelBackService.getSeriesData().team1).toMatchObject({
                 name: 'Fallback Alpha',
                 logo: 'fallback-alpha-logo',
@@ -258,21 +281,18 @@ describe('MichelBackService', () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
             const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
-            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
-                const response = new EventEmitter() as any
-                response.statusCode = 403
-                callback(response)
-                response.emit('data', JSON.stringify({}))
-                response.emit('end')
-                return createMockHttpsRequest()
-            }) as any)
-            const fetchMock = spyOn(global, 'fetch').mockResolvedValue({ status: 500 } as unknown as Response)
+            const httpsGetMock = mockHttpsByUrl([
+                { match: 'www.faceit.com/api/match/v2', statusCode: 403, body: {} },
+                { match: 'open.faceit.com/data/v4/matches', statusCode: 500, body: {} },
+            ])
+            const fetchMock = spyOn(global, 'fetch')
 
             // action
             await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
 
             // assert
-            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(httpsGetMock).toHaveBeenCalledTimes(2)
+            expect(fetchMock).not.toHaveBeenCalled()
             expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
             expect(res.json).not.toHaveBeenCalled()
         })
@@ -297,36 +317,31 @@ describe('MichelBackService', () => {
 
             // assert
             expect(capturedRequest.setTimeout).toHaveBeenCalledWith(15000)
-            expect(capturedRequest.destroy).toHaveBeenCalledWith(new Error('FaceIt public request timed out after 15000 ms'))
+            expect(capturedRequest.destroy).toHaveBeenCalledWith(new Error('FaceIt request timed out after 15000 ms'))
             expect(fetchMock).not.toHaveBeenCalled()
             expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
             expect(res.json).not.toHaveBeenCalled()
         })
 
-        it('should not update state if the authenticated fallback fetch times out', async () => {
+        it('should not update state if the authenticated fallback request times out', async () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
             const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
-            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
-                const response = new EventEmitter() as any
-                response.statusCode = 418
-                callback(response)
-                response.emit('data', JSON.stringify({}))
-                response.emit('end')
-                return createMockHttpsRequest()
-            }) as any)
-            // AbortSignal.timeout aborts fetch with a DOMException; model that
-            // rejection so we prove a timed-out authenticated call leaves state
-            // untouched rather than crashing.
-            const fetchMock = spyOn(global, 'fetch').mockRejectedValue(
-                new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-            )
+            // Public endpoint fails cleanly, then the authenticated request goes
+            // idle and fires 'timeout'; the shared https.get idle-timeout funnel
+            // must turn that into a rejection that leaves state untouched.
+            const httpsGetMock = mockHttpsByUrl([
+                { match: 'www.faceit.com/api/match/v2', statusCode: 418, body: {} },
+                { match: 'open.faceit.com/data/v4/matches', statusCode: 200, body: {}, timeout: true },
+            ])
+            const fetchMock = spyOn(global, 'fetch')
 
             // action
             await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
 
             // assert
-            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(httpsGetMock).toHaveBeenCalledTimes(2)
+            expect(fetchMock).not.toHaveBeenCalled()
             expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
             expect(res.json).not.toHaveBeenCalled()
         })
@@ -335,27 +350,27 @@ describe('MichelBackService', () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
             const res: ExpressResponse = { json: fn() } as unknown as ExpressResponse
-            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
-                const request = createMockHttpsRequest()
-                setImmediate(() => request.emit('timeout'))
-                return request
-            }) as any)
-            const authenticatedFaceItResponse = {
-                status: 200,
-                json: fn<any>().mockResolvedValue({
-                    teams: {
-                        faction1: { name: 'Timeout Alpha', avatar: 'timeout-alpha-logo' },
-                        faction2: { name: 'Timeout Bravo', avatar: 'timeout-bravo-logo' },
+            const httpsGetMock = mockHttpsByUrl([
+                { match: 'www.faceit.com/api/match/v2', statusCode: 200, body: {}, timeout: true },
+                {
+                    match: 'open.faceit.com/data/v4/matches',
+                    statusCode: 200,
+                    body: {
+                        teams: {
+                            faction1: { name: 'Timeout Alpha', avatar: 'timeout-alpha-logo' },
+                            faction2: { name: 'Timeout Bravo', avatar: 'timeout-bravo-logo' },
+                        },
                     },
-                }),
-            } as unknown as Response
-            const fetchMock = spyOn(global, 'fetch').mockResolvedValue(authenticatedFaceItResponse)
+                },
+            ])
+            const fetchMock = spyOn(global, 'fetch')
 
             // action
             await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
 
             // assert
-            expect(fetchMock).toHaveBeenCalledTimes(1)
+            expect(httpsGetMock).toHaveBeenCalledTimes(2)
+            expect(fetchMock).not.toHaveBeenCalled()
             expect(michelBackService.getSeriesData().team1).toMatchObject({
                 name: 'Timeout Alpha',
                 logo: 'timeout-alpha-logo',
@@ -370,6 +385,9 @@ describe('MichelBackService', () => {
     describe('updatedLobbyDataFromFaceItMatchId', () => {
         beforeEach(() => {
             const connectionPool = []
+            jest.restoreAllMocks()
+            ;(global.fetch as any).mockRestore?.()
+            jest.mocked(https.get).mockReset()
             michelBackService = new MichelBackService(connectionPool, false)
         })
 
@@ -381,48 +399,45 @@ describe('MichelBackService', () => {
             // assert
             expect(nextMock).not.toHaveBeenCalled()
         })
-        it('should log an error and return if matchId is provided but fetch fails', async () => {
+        it('should log an error and return if matchId is provided but the request fails', async () => {
             // setup
             const nextMock = fn()
-
-            const mockedFetchResponse = {
-                status: 418
-            } as unknown as Response
-            const fetchMock = spyOn(global, 'fetch').mockResolvedValue(
-                mockedFetchResponse
-            )
-            // const errorSpy = spyOn(console, 'error').mockImplementation(() => {
-            // })
+            const httpsGetMock = mockHttpsByUrl([
+                { match: 'www.faceit.com/api/democracy/v1', statusCode: 418, body: {} },
+            ])
             const errorSpy = spyOn((michelBackService as any).logger, 'error').mockImplementation(() => {
             })
             // action
             await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
             // assert
-            expect(fetchMock).toHaveBeenCalledWith('https://www.faceit.com/api/democracy/v1/match/match-id/history', {
-                "headers": {
-                    "Accept": "application/json",
-                }, "method": "GET"
-            })
+            expect(httpsGetMock).toHaveBeenCalledWith('https://www.faceit.com/api/democracy/v1/match/match-id/history', {
+                headers: {
+                    Accept: 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+                },
+            }, expect.any(Function))
             expect(errorSpy).toHaveBeenCalledWith({ msg: 'Could not update lobby data using FaceIt match id match-id', error: 'Response status not 200 : 418'})
             expect(nextMock).toHaveBeenCalled()
         })
         it('should still call next when the votes for the map have no entities', async () => {
             // setup
             const nextMock = fn()
-            const mockedFetchResponse = {
-                status: 200,
-                json: () => Promise.resolve({
-                    payload: {
-                        tickets: [
-                            {
-                                entity_type: 'heroes',
-                                entities: []
-                            }
-                        ]
-                    }
-                })
-            } as unknown as Response
-            spyOn(global, 'fetch').mockResolvedValue(mockedFetchResponse)
+            mockHttpsByUrl([
+                {
+                    match: 'www.faceit.com/api/democracy/v1',
+                    statusCode: 200,
+                    body: {
+                        payload: {
+                            tickets: [
+                                {
+                                    entity_type: 'heroes',
+                                    entities: [],
+                                },
+                            ],
+                        },
+                    },
+                },
+            ])
             // action
             await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
             // assert

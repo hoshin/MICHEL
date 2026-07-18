@@ -87,6 +87,15 @@ let apiKey = process.env.FACEIT_KEY
 
 const FACEIT_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
 
+// Base headers sent on every FaceIt request. The browser User-Agent is
+// mandatory on the public match endpoint (which 403s without it) and harmless
+// elsewhere; keeping it in one shared constant is what prevents the per-call
+// drift that previously left some calls spoofing the UA and others not.
+const FACEIT_BASE_HTTP_HEADERS: Record<string, string> = {
+    'Accept': 'application/json',
+    'User-Agent': FACEIT_BROWSER_USER_AGENT,
+}
+
 // Client-side idle timeout for FaceIt lookups. Without it, a FaceIt server
 // that accepts the connection but never responds (or stalls mid-body) would
 // leave the awaited request hanging indefinitely. 15s is generous for a
@@ -491,11 +500,20 @@ export class MichelBackService {
         }
     }
 
-    private getJsonUsingNodeHttps = (url: string): Promise<any> => new Promise((resolve, reject) => {
+    // Every FaceIt call goes through this single Node https.get client. This
+    // is deliberate, not incidental: the www.faceit.com match endpoint is
+    // gated by a WAF that inspects BOTH the User-Agent (403 without the
+    // browser UA) AND the TLS/connection fingerprint. Empirically, Node's
+    // https stack clears that fingerprint check while fetch/undici does not
+    // (fetch returns 403 even WITH the browser UA), so the whole-application
+    // choice of https.get over fetch is load-bearing. Consolidating the
+    // authenticated and history calls here too keeps a single client and a
+    // single set of headers, so the UA can never drift out of sync again.
+    private getJsonUsingNodeHttps = (url: string, extraHeaders: Record<string, string> = {}): Promise<any> => new Promise((resolve, reject) => {
         const request = https.get(url, {
             headers: {
-                'Accept': 'application/json',
-                'User-Agent': FACEIT_BROWSER_USER_AGENT,
+                ...FACEIT_BASE_HTTP_HEADERS,
+                ...extraHeaders,
             },
         }, response => {
             let responseBody = ''
@@ -525,7 +543,7 @@ export class MichelBackService {
         // into the single rejection path.
         request.setTimeout(FACEIT_HTTP_TIMEOUT_MS)
         request.on('timeout', () => {
-            request.destroy(new Error(`FaceIt public request timed out after ${FACEIT_HTTP_TIMEOUT_MS} ms`))
+            request.destroy(new Error(`FaceIt request timed out after ${FACEIT_HTTP_TIMEOUT_MS} ms`))
         })
 
         request.on('error', reject)
@@ -537,22 +555,14 @@ export class MichelBackService {
             throw new Error('No FaceIt API key available for authenticated fallback')
         }
 
-        const response = await fetch(`https://open.faceit.com/data/v4/matches/${matchId}`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${key}`,
-                'Accept': 'application/json',
-            },
-            // Same rationale as the public request: bound the wait so a stalled
-            // authenticated endpoint cannot hang the fallback indefinitely.
-            signal: AbortSignal.timeout(FACEIT_HTTP_TIMEOUT_MS),
+        // open.faceit.com is the official authenticated API and, unlike the
+        // public www endpoint, is not fingerprint-gated (verified: it returns
+        // a JSON auth error rather than a WAF page under both clients). It goes
+        // through the shared https.get client purely for consistency and to
+        // inherit the same idle-timeout handling.
+        return this.getJsonUsingNodeHttps(`https://open.faceit.com/data/v4/matches/${matchId}`, {
+            'Authorization': `Bearer ${key}`,
         })
-
-        if (response.status !== 200) {
-            throw new Error(`Response status not 200 : ${response.status}`)
-        }
-
-        return response.json()
     }
 
     private normalizedPublicFaceItMatchData = (jsonData: any) => {
@@ -663,109 +673,97 @@ export class MichelBackService {
         if (!matchId) {
             return
         }
-        return fetch(`https://www.faceit.com/api/democracy/v1/match/${matchId}/history`, {
-            method: 'GET',
-            headers: {
-                //'Authorization': `Bearer ${apiKey}`,
-                'Accept': 'application/json',
-            }
-        })
-        .then(response => {
-            if (response.status !== 200) {
-                throw new Error(`Response status not 200 : ${response.status}`)
-            }
-            response.json().then(jsonData => {
 
-                const heroVotingPerMap = jsonData?.payload?.tickets.filter(ticket => ticket.entity_type === 'heroes')
+        let jsonData: any
+        try {
+            // Same shared https.get client as every other FaceIt call: the
+            // history endpoint tolerates a plain client today, but routing it
+            // here keeps a single stack + the mandatory browser UA so a future
+            // WAF tightening cannot silently break it.
+            jsonData = await this.getJsonUsingNodeHttps(`https://www.faceit.com/api/democracy/v1/match/${matchId}/history`)
+        } catch (error) {
+            this.logger.error({ msg:`Could not update lobby data using FaceIt match id ${matchId}`, error: error.message})
+            next()
+            return
+        }
+
+        try {
+            const heroVotingPerMap = jsonData?.payload?.tickets.filter(ticket => ticket.entity_type === 'heroes')
+            this.logger.info({
+                msg: 'UpdateLobbyDataFromFaceItMatchId',
+                jsonData: JSON.stringify(jsonData),
+                map: mapNumber-1,
+                heroVotingPerMapLength: heroVotingPerMap.length,
+                heroVotingForCurrentMap: heroVotingPerMap?.[mapNumber -1]
+            })
+            // mapNumber => [1, +Infinity[
+            const votesForMap = heroVotingPerMap?.[mapNumber - 1]
+            const votesForMapHasEntities = votesForMap?.entities && votesForMap.entities.length > 0
+            if (votesForMap !== undefined && !votesForMapHasEntities) {
+                this.logger.info({ msg: 'votesForMap has no entities'})
+            }
+            if (votesForMapHasEntities) {
+                const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
+                    guid: bannedPick.guid,
+                    selected_by: bannedPick.selected_by,
+                    round: bannedPick.round,
+                }))
                 this.logger.info({
-                    msg: 'UpdateLobbyDataFromFaceItMatchId',
-                    jsonData: JSON.stringify(jsonData),
-                    map: mapNumber-1,
-                    heroVotingPerMapLength: heroVotingPerMap.length,
-                    heroVotingForCurrentMap: heroVotingPerMap?.[mapNumber -1]
+                    msg: 'list of banned heroes',
+                    bannedHeroes: bannedHeroes,
                 })
-                // mapNumber => [1, +Infinity[
-                const votesForMap = heroVotingPerMap?.[mapNumber - 1]
-                const votesForMapHasEntities = votesForMap?.entities && votesForMap.entities.length > 0
-                if (votesForMap !== undefined && !votesForMapHasEntities) {
-                    this.logger.info({ msg: 'votesForMap has no entities'})
+                const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
+                this.logger.info({
+                    msg: 'list of guids to lookup',
+                    heroesGuidsToLookup: heroesGuidsToLookup,
+                })
+                let filteredHeroDataForMap
+                if(!this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
+                    // force lookup
+                    this.logger.info({
+                        msg: 'Not all required data for votes is present => requerying',
+                            length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
+                            entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
+                            heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
+                            voting: this.seriesData?.faceIt?.raw?.voting,
+                            raw: this.seriesData?.faceIt?.raw
+                    })
+
+                    // control flow issue => should be fast enough but no guarantee
+                    this.initialMatchDataFromFaceItMatchId(null, matchId)
                 }
-                if (votesForMapHasEntities) {
-                    const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
-                        guid: bannedPick.guid,
-                        selected_by: bannedPick.selected_by,
-                        round: bannedPick.round,
-                    }))
-                    this.logger.info({
-                        msg: 'list of banned heroes',
-                        bannedHeroes: bannedHeroes,
+                if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
+                    filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
+                    this.logger.info({msg:'have a list of heroes we can filter for target map',
+                        filteredHeroes: filteredHeroDataForMap,
                     })
-                    // this.logger.info(`[MBA] bannedHeroes ${mapNumber}`, JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities, null, 2))
-                    const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
-                    this.logger.info({
-                        msg: 'list of guids to lookup',
-                        heroesGuidsToLookup: heroesGuidsToLookup,
-                    })
-                    // this.logger.info('[MBA] bannedHeroes data', JSON.stringify(this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid)), null, 2))
-                    let filteredHeroDataForMap
-                    try{
-                        if(!this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
-                            // force lookup
-                            this.logger.info({
-                                msg: 'Not all required data for votes is present => requerying',
-                                    length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
-                                    entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
-                                    heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
-                                    voting: this.seriesData?.faceIt?.raw?.voting,
-                                    raw: this.seriesData?.faceIt?.raw
-                            })
+                }
+                this.logger.info({msg:'filteredHeroDataForMap END, hopefully we hit an update branch before'})
+                const team1Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction1')[0]
+                const team2Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction2')[0]
 
-                            // control flow issue => should be fast enough but no guarantee
-                            this.initialMatchDataFromFaceItMatchId(null, matchId)
-                        }
-                        if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
-                            filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
-                            this.logger.info({msg:'have a list of heroes we can filter for target map',
-                                filteredHeroes: filteredHeroDataForMap,
-                            })
-                        }
-                        this.logger.info({msg:'filteredHeroDataForMap END, hopefully we hit an update branch before'})
-                    } catch (error){
-                        this.logger.error({msg:'Attempted to get filteredHeroDataForMap and crashed', error: error.message})
-                        next()
-                    }
-                    const team1Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction1')[0]
-                    const team2Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction2')[0]
-
-                    // this.logger.info('[MBA] filteredHeroDataForMap', JSON.stringify(filteredHeroDataForMap, null, 2))
-                    const heroDataForTeam1Ban = filteredHeroDataForMap.filter(ban => team1Ban.guid === ban.guid)[0]
-                    const heroDataForTeam2Ban = filteredHeroDataForMap.filter(ban => team2Ban.guid === ban.guid)[0]
-                    if (heroDataForTeam1Ban && heroDataForTeam2Ban) {
-                        this.seriesData.standings[`match${mapNumber}`] = {
-                            bans: {
-                                team1: {
-                                    heroImage: heroDataForTeam1Ban.image_lg,
-                                    heroName: heroDataForTeam1Ban.name
-                                },
-                                team2: {
-                                    heroImage: heroDataForTeam2Ban.image_lg,
-                                    heroName: heroDataForTeam2Ban.name
-                                }
+                const heroDataForTeam1Ban = filteredHeroDataForMap.filter(ban => team1Ban.guid === ban.guid)[0]
+                const heroDataForTeam2Ban = filteredHeroDataForMap.filter(ban => team2Ban.guid === ban.guid)[0]
+                if (heroDataForTeam1Ban && heroDataForTeam2Ban) {
+                    this.seriesData.standings[`match${mapNumber}`] = {
+                        bans: {
+                            team1: {
+                                heroImage: heroDataForTeam1Ban.image_lg,
+                                heroName: heroDataForTeam1Ban.name
+                            },
+                            team2: {
+                                heroImage: heroDataForTeam2Ban.image_lg,
+                                heroName: heroDataForTeam2Ban.name
                             }
                         }
                     }
                 }
-                next()
-            })
-                .catch(error => {
-                    this.logger.error({ msg: 'Error fetching faceit match details (bans)', error: error.message})
-                    next()
-                })
-        })
-        .catch(error => {
-            this.logger.error({ msg:`Could not update lobby data using FaceIt match id ${matchId}`, error: error.message})
+            }
             next()
-        })
+        } catch (error) {
+            this.logger.error({ msg: 'Error fetching faceit match details (bans)', error: error.message})
+            next()
+        }
     }
 
     fetchFaceItMatchUpdates = (res: Response, mapNumber: number) => {
