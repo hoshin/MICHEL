@@ -3,7 +3,7 @@ import * as https from "https"
 import {Response} from "express"
 
 import pino from 'pino'
-import type { Logger } from "pino"
+import type {Logger} from "pino"
 
 type TeamDescription = {
     name: string,
@@ -85,26 +85,21 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
 
 let apiKey = process.env.FACEIT_KEY
 
-const FACEIT_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
+const FACEIT_PUBLIC_MODE_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
 
-// Base headers sent on every FaceIt request. The browser User-Agent is
-// mandatory on the public match endpoint (which 403s without it) and harmless
-// elsewhere; keeping it in one shared constant is what prevents the per-call
-// drift that previously left some calls spoofing the UA and others not.
-const FACEIT_BASE_HTTP_HEADERS: Record<string, string> = {
+// Browser User-Agent is mandatory on public FaceIt match endpoint (which 403s without it)
+// and harmless elsewhere; keeping it in all headers for consistency, and in case FaceIt's
+// policy starts requiring it for other endpoints
+const FACEIT_PUBLIC_MODE_BASE_HTTP_HEADERS: Record<string, string> = {
     'Accept': 'application/json',
-    'User-Agent': FACEIT_BROWSER_USER_AGENT,
+    'User-Agent': FACEIT_PUBLIC_MODE_BROWSER_USER_AGENT,
 }
 
-// Client-side idle timeout for FaceIt lookups. Without it, a FaceIt server
-// that accepts the connection but never responds (or stalls mid-body) would
-// leave the awaited request hanging indefinitely. 15s is generous for a
-// metadata lookup while still failing fast enough to fall through to the
-// authenticated fallback or give up.
-const FACEIT_HTTP_TIMEOUT_MS = 15000
+// Unknown when FaceIt might decide to terminate a hanging connexion,
+// so we ensure we purposefully do it after this timeout on our end
+const FACEIT_CLIENT_HTTP_TIMEOUT_MS = 15000
 
-// since one could explicitly provide an empty key through env variables, the test to `undefined` was not accurate.
-// this is a laxer approach that will treat empty keys as falsy values and go to the fallback config file value in such a case
+// Treat empty keys as falsy values and go to the fallback config file value
 const effectiveFaceItApiKey = () => process.env.FACEIT_KEY ? process.env.FACEIT_KEY : apiKey
 
 process.env.MICH_LOG_PATH='./'
@@ -117,6 +112,7 @@ export class MichelBackService {
     // Server-owned 1 s tick for the countdown. We hold a reference here so
     // that pause / reset / a new start can replace any running interval
     // without leaking timers. Reset to null whenever the countdown stops.
+    // Centralized to allow multiple views to share the same countdown timer and guarantee sync
     private countdownTimer: ReturnType<typeof setInterval> | null = null
 
     constructor(connectionPool, debug: boolean, seriesData?: SeriesData, logger?: Logger) {
@@ -157,7 +153,10 @@ export class MichelBackService {
                 this.seriesData = jsonSeriesConfigurationFromFile
             }
         } catch (error) {
-            this.logger.warn({ msg: 'No config file found! Initializing seriesData with default values.', error: error.message})
+            this.logger.warn({
+                msg: 'No config file found! Initializing seriesData with default values.',
+                error: error.message
+            })
         }
     }
 
@@ -168,7 +167,7 @@ export class MichelBackService {
     handleCommand(payloadAsBuffer: Buffer) {
         const payload = JSON.parse(payloadAsBuffer.toString('utf8'))
         if (this.debug) {
-            this.logger.info({ msg: '[DEBUG] Incoming command: ', payload})
+            this.logger.info({msg: '[DEBUG] Incoming command: ', payload})
         }
         switch (payload.command) {
             case 'increaseTeam1Score':
@@ -273,7 +272,7 @@ export class MichelBackService {
         if (this.connectionPool) {
             const connectionPoolWithonlyUnclosedSockets = this.connectionPool.filter(socket => !socket._closeFrameReceived)
             if (this.connectionPool.length !== connectionPoolWithonlyUnclosedSockets.length) {
-                this.logger.info({ msg: `Connection pool cleanup (remove closing / closed sockets): Base - ${this.connectionPool.length} => New - ${connectionPoolWithonlyUnclosedSockets.length}`})
+                this.logger.info({msg: `Connection pool cleanup (remove closing / closed sockets): Base - ${this.connectionPool.length} => New - ${connectionPoolWithonlyUnclosedSockets.length}`})
                 this.connectionPool = connectionPoolWithonlyUnclosedSockets
             }
 
@@ -482,7 +481,10 @@ export class MichelBackService {
 
     updateMapCountAndRefreshFaceItDataIfNeeded = (res: Response, increment: number = 1) => {
         const candidate = this.seriesData.display.mapCount + increment
-        this.logger.debug({msg: 'updateMapCountAndRefreshFaceItDataIfNeeded', mapCount: this.seriesData.display.mapCount})
+        this.logger.debug({
+            msg: 'updateMapCountAndRefreshFaceItDataIfNeeded',
+            mapCount: this.seriesData.display.mapCount
+        })
         if (candidate === this.seriesData.display.mapCount) {
             this.sendUpdatedStateToCaller(res)
         } else {
@@ -500,19 +502,19 @@ export class MichelBackService {
         }
     }
 
-    // Every FaceIt call goes through this single Node https.get client. This
-    // is deliberate, not incidental: the www.faceit.com match endpoint is
-    // gated by a WAF that inspects BOTH the User-Agent (403 without the
-    // browser UA) AND the TLS/connection fingerprint. Empirically, Node's
-    // https stack clears that fingerprint check while fetch/undici does not
-    // (fetch returns 403 even WITH the browser UA), so the whole-application
-    // choice of https.get over fetch is load-bearing. Consolidating the
-    // authenticated and history calls here too keeps a single client and a
-    // single set of headers, so the UA can never drift out of sync again.
+    /**
+     * Every FaceIt call goes through this single Node https.get client.
+     * The www.faceit.com match endpoint looks gated by a WAF that inspects BOTH the User-Agent
+     * (403 without the browser UA) AND the TLS/connection fingerprint. Empirically, Node's
+     * https stack clears that fingerprint check while fetch/undici does not,
+     * so the whole-application choice of https.get over fetch is load-bearing.
+     * Consolidating all FaceIt calls (API or public mode) through a single client
+     * should hopefully prevent other similar issues... and will make things easier to maintain
+     */
     private getJsonUsingNodeHttps = (url: string, extraHeaders: Record<string, string> = {}): Promise<any> => new Promise((resolve, reject) => {
         const request = https.get(url, {
             headers: {
-                ...FACEIT_BASE_HTTP_HEADERS,
+                ...FACEIT_PUBLIC_MODE_BASE_HTTP_HEADERS,
                 ...extraHeaders,
             },
         }, response => {
@@ -536,30 +538,24 @@ export class MichelBackService {
             })
         })
 
-        // Node imposes no default socket timeout, so a FaceIt server that
-        // accepts the connection but never responds would leave this promise
-        // pending forever. Arm an idle timeout and destroy the request when it
+        // In case FaceIt times out late / never
+        // Arm an idle timeout and destroy the request when it
         // fires; destroy(err) re-emits 'error', which the handler below turns
         // into the single rejection path.
-        request.setTimeout(FACEIT_HTTP_TIMEOUT_MS)
+        request.setTimeout(FACEIT_CLIENT_HTTP_TIMEOUT_MS)
         request.on('timeout', () => {
-            request.destroy(new Error(`FaceIt request timed out after ${FACEIT_HTTP_TIMEOUT_MS} ms`))
+            request.destroy(new Error(`FaceIt request timed out after ${FACEIT_CLIENT_HTTP_TIMEOUT_MS} ms`))
         })
 
         request.on('error', reject)
     })
 
-    private getAuthenticatedFaceItMatchData = async (matchId: string): Promise<any> => {
+    private getAuthenticatedAPIFaceItMatchData = async (matchId: string): Promise<any> => {
         const key = effectiveFaceItApiKey()
         if (!key) {
             throw new Error('No FaceIt API key available for authenticated fallback')
         }
 
-        // open.faceit.com is the official authenticated API and, unlike the
-        // public www endpoint, is not fingerprint-gated (verified: it returns
-        // a JSON auth error rather than a WAF page under both clients). It goes
-        // through the shared https.get client purely for consistency and to
-        // inherit the same idle-timeout handling.
         return this.getJsonUsingNodeHttps(`https://open.faceit.com/data/v4/matches/${matchId}`, {
             'Authorization': `Bearer ${key}`,
         })
@@ -610,7 +606,7 @@ export class MichelBackService {
             return this.normalizedPublicFaceItMatchData(publicJsonData)
         } catch (publicError) {
             this.logger.error({msg:'Public FaceIt match data query failed', error: publicError})
-            const authenticatedJsonData = await this.getAuthenticatedFaceItMatchData(matchId)
+            const authenticatedJsonData = await this.getAuthenticatedAPIFaceItMatchData(matchId)
             return this.normalizedAuthenticatedFaceItMatchData(authenticatedJsonData)
         }
     }
@@ -676,13 +672,12 @@ export class MichelBackService {
 
         let jsonData: any
         try {
-            // Same shared https.get client as every other FaceIt call: the
-            // history endpoint tolerates a plain client today, but routing it
-            // here keeps a single stack + the mandatory browser UA so a future
-            // WAF tightening cannot silently break it.
             jsonData = await this.getJsonUsingNodeHttps(`https://www.faceit.com/api/democracy/v1/match/${matchId}/history`)
         } catch (error) {
-            this.logger.error({ msg:`Could not update lobby data using FaceIt match id ${matchId}`, error: error.message})
+            this.logger.error({
+                msg: `Could not update lobby data using FaceIt match id ${matchId}`,
+                error: error.message
+            })
             next()
             return
         }
@@ -722,19 +717,19 @@ export class MichelBackService {
                     // force lookup
                     this.logger.info({
                         msg: 'Not all required data for votes is present => requerying',
-                            length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
-                            entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
-                            heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
-                            voting: this.seriesData?.faceIt?.raw?.voting,
-                            raw: this.seriesData?.faceIt?.raw
+                        length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
+                        entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
+                        heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
+                        voting: this.seriesData?.faceIt?.raw?.voting,
+                        raw: this.seriesData?.faceIt?.raw
                     })
 
-                    // control flow issue => should be fast enough but no guarantee
-                    this.initialMatchDataFromFaceItMatchId(null, matchId)
+                    await this.initialMatchDataFromFaceItMatchId(null, matchId)
                 }
                 if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
                     filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
-                    this.logger.info({msg:'have a list of heroes we can filter for target map',
+                    this.logger.info({
+                        msg: 'have a list of heroes we can filter for target map',
                         filteredHeroes: filteredHeroDataForMap,
                     })
                 }
