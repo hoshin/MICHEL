@@ -7,7 +7,7 @@ import {Response as ExpressResponse} from 'express'
 import Mock = jest.Mock;
 
 jest.mock('https', () => ({
-    get: fn(),
+    get: jest.fn(),
 }))
 
 // Mirrors the slice of https.ClientRequest the production code relies on: it

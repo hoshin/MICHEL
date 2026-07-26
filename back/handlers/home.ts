@@ -4,6 +4,7 @@ import {Response} from "express"
 
 import pino from 'pino'
 import type {Logger} from "pino"
+import * as path from "node:path"
 
 type TeamDescription = {
     name: string,
@@ -25,11 +26,11 @@ type GeneralMatchInformation = {
     // that overlays see a consistent value, the timer survives a Config
     // Center page reload, and OBS browser sources never have to share
     // state with another browsing context.
-    countdown: number,
-    countdownRunning: boolean,
+    countdown?: number,
+    countdownRunning?: boolean,
     // CSS color string used by the <CountdownTimer /> component. Empty
     // string means "fall back to the component's CSS default".
-    countdownColor: string
+    countdownColor?: string
 }
 type BanData = {
     heroImage?: string,
@@ -42,6 +43,7 @@ export type SeriesData = {
     faceIt: {
         matchId: string,
         raw?: any
+        apiKey?: string,
     },
     standings: {
         [mapId: string]: {
@@ -83,7 +85,7 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
     standings: {}
 }
 
-let apiKey = process.env.FACEIT_KEY
+const CONFIGFILE_PATH = path.resolve(process.env.CONFIGFILE_PATH || './back/config.json')
 
 const FACEIT_PUBLIC_MODE_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
 
@@ -99,9 +101,6 @@ const FACEIT_PUBLIC_MODE_BASE_HTTP_HEADERS: Record<string, string> = {
 // so we ensure we purposefully do it after this timeout on our end
 const FACEIT_CLIENT_HTTP_TIMEOUT_MS = 15000
 
-// Treat empty keys as falsy values and go to the fallback config file value
-const effectiveFaceItApiKey = () => process.env.FACEIT_KEY ? process.env.FACEIT_KEY : apiKey
-
 process.env.MICH_LOG_PATH='./'
 
 export class MichelBackService {
@@ -109,6 +108,7 @@ export class MichelBackService {
     private debug: boolean
     private seriesData: SeriesData
     private logger: Logger
+    private faceItApiKeyFromConfigFile: string | undefined
     // Server-owned 1 s tick for the countdown. We hold a reference here so
     // that pause / reset / a new start can replace any running interval
     // without leaking timers. Reset to null whenever the countdown stops.
@@ -119,7 +119,6 @@ export class MichelBackService {
         this.connectionPool = connectionPool
         this.seriesData = seriesData ?? structuredClone(DEFAULT_SERIES_DATA)
         this.debug = debug
-
         const fileTransport = pino.transport({
             target: 'pino/file',
             options: { destination: `${process.env.MICH_LOG_PATH}/app.log` },
@@ -139,22 +138,14 @@ export class MichelBackService {
         )
 
         try {
-            const configFile = fs.readFileSync('./back/config.json')
-            this.logger.info('Config file present ... updating seriesData!')
-            const jsonSeriesConfigurationFromFile = JSON.parse(configFile.toString('utf8')).seriesData
-            if(!apiKey){
-                apiKey = jsonSeriesConfigurationFromFile.faceIt.apiKey
-            }
-            // this.logger.info(`API key? ${apiKey}`)
-            if (jsonSeriesConfigurationFromFile?.faceIt?.matchId?.length > 0) {
-                this.logger.info(`FaceIt matchID present in config file! Building series data with it! ${jsonSeriesConfigurationFromFile.faceIt.matchId}`)
-                this.initialMatchDataFromFaceItMatchId(null, jsonSeriesConfigurationFromFile.faceIt.matchId)
-            } else {
-                this.seriesData = jsonSeriesConfigurationFromFile
-            }
+            this.logger.info({ msg: 'Config file present -> updating seriesData', path: CONFIGFILE_PATH})
+            const configFile = JSON.parse(fs.readFileSync(CONFIGFILE_PATH).toString())
+            const jsonSeriesConfigurationFromFile: SeriesData = configFile.seriesData
+            this.seriesData = jsonSeriesConfigurationFromFile
+            this.faceItApiKeyFromConfigFile = jsonSeriesConfigurationFromFile?.faceIt?.apiKey
         } catch (error) {
             this.logger.warn({
-                msg: 'No config file found! Initializing seriesData with default values.',
+                msg: 'No valid config file found! Initializing seriesData with default values.',
                 error: error.message
             })
         }
@@ -550,8 +541,12 @@ export class MichelBackService {
         request.on('error', reject)
     })
 
-    private getAuthenticatedAPIFaceItMatchData = async (matchId: string): Promise<any> => {
-        const key = effectiveFaceItApiKey()
+    // Runtime env var wins so operators can override without editing the
+    // config file; environment variable always supersedes configuration
+    private effectiveFaceItApiKey = (): string | undefined =>
+        process.env.FACEIT_KEY || this.faceItApiKeyFromConfigFile
+
+    private getAuthenticatedAPIFaceItMatchData = async (matchId: string, key: string | undefined): Promise<any> => {
         if (!key) {
             throw new Error('No FaceIt API key available for authenticated fallback')
         }
@@ -605,8 +600,8 @@ export class MichelBackService {
             const publicJsonData = await this.getJsonUsingNodeHttps(`https://www.faceit.com/api/match/v2/match/${matchId}`)
             return this.normalizedPublicFaceItMatchData(publicJsonData)
         } catch (publicError) {
-            this.logger.error({msg:'Public FaceIt match data query failed', error: publicError})
-            const authenticatedJsonData = await this.getAuthenticatedAPIFaceItMatchData(matchId)
+            this.logger.warn({msg:'Public FaceIt match data query failed. Attempting authenticated API call.', error: publicError.message})
+            const authenticatedJsonData = await this.getAuthenticatedAPIFaceItMatchData(matchId, this.effectiveFaceItApiKey())
             return this.normalizedAuthenticatedFaceItMatchData(authenticatedJsonData)
         }
     }
@@ -619,7 +614,13 @@ export class MichelBackService {
             const faceItMatchData = await this.getNormalizedFaceItMatchData(matchId)
             this.logger.info({
                 msg: 'FaceIt match data querying',
-                faceItMatchData
+                faceItMatchData: {
+                    team1Name: faceItMatchData.team1.name,
+                    team1Avatar: faceItMatchData.team1.avatar,
+                    team2Name: faceItMatchData.team2.name,
+                    team2Avatar: faceItMatchData.team2.avatar,
+                    matchId: matchId
+                }
             })
 
             this.seriesData.team1.name = faceItMatchData.team1.name
@@ -629,17 +630,15 @@ export class MichelBackService {
 
             this.seriesData.faceIt.matchId = matchId
             this.seriesData.faceIt.raw = faceItMatchData.raw
-            this.logger.info({
-                msg: '1st FaceIt match data querying (teams)',
-                length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
-                entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
-                heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
-                voting: this.seriesData?.faceIt?.raw?.voting,
-                raw: this.seriesData?.faceIt?.raw
-            })
-
-            if (this.debug) {
-                this.logger.info(`updateFromMatchId ${matchId}`)
+            if(this.debug){
+                this.logger.info({
+                    msg: '1st FaceIt match data querying (teams)',
+                    length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
+                    entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
+                    heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
+                    voting: this.seriesData?.faceIt?.raw?.voting,
+                    raw: this.seriesData?.faceIt?.raw
+                })
             }
             this.sendUpdatedStateToCaller(res)
             return this.seriesData
@@ -686,10 +685,7 @@ export class MichelBackService {
             const heroVotingPerMap = jsonData?.payload?.tickets.filter(ticket => ticket.entity_type === 'heroes')
             this.logger.info({
                 msg: 'UpdateLobbyDataFromFaceItMatchId',
-                jsonData: JSON.stringify(jsonData),
                 map: mapNumber-1,
-                heroVotingPerMapLength: heroVotingPerMap.length,
-                heroVotingForCurrentMap: heroVotingPerMap?.[mapNumber -1]
             })
             // mapNumber => [1, +Infinity[
             const votesForMap = heroVotingPerMap?.[mapNumber - 1]
@@ -709,7 +705,7 @@ export class MichelBackService {
                 })
                 const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
                 this.logger.info({
-                    msg: 'list of guids to lookup',
+                    msg: 'list of Hero guids to lookup',
                     heroesGuidsToLookup: heroesGuidsToLookup,
                 })
                 let filteredHeroDataForMap
@@ -992,6 +988,7 @@ export class MichelBackService {
         // We still broadcast once if no fetch was triggered so the scenes
         // see all the other applied fields immediately.
         if (!matchIdTriggeredFetch) {
+
             this.sendUpdatedStateToCaller(res)
         } else if (res && !res.headersSent) {
             // Echo current state back to the HTTP caller (if any) without
