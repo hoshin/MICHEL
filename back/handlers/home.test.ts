@@ -58,6 +58,7 @@ const mockHttpsByUrl = (routes: Array<{ match: string } & CannedHttpsResponse>) 
 describe('MichelBackService', () => {
     let michelBackService: MichelBackService
     const originalFaceItKey = process.env.FACEIT_KEY
+    const originalConfigFilePath = process.env.CONFIGFILE_PATH
 
     describe('initialMatchDataFromFaceItMatchId', () => {
         beforeEach(() => {
@@ -66,11 +67,13 @@ describe('MichelBackService', () => {
             ;(global.fetch as any).mockRestore?.()
             jest.mocked(https.get).mockReset()
             process.env.FACEIT_KEY = ''
+            process.env.CONFIGFILE_PATH = 'bogus/path' // fake path to force using an inexploitable config file
             michelBackService = new MichelBackService(connectionPool, false)
         })
 
         afterAll(() => {
             process.env.FACEIT_KEY = originalFaceItKey
+            process.env.CONFIGFILE_PATH = originalConfigFilePath
         })
 
         it('should get team names and logos from the public FaceIt match endpoint', async () => {
@@ -258,7 +261,7 @@ describe('MichelBackService', () => {
         it('should not update state if the public FaceIt match endpoint fails and no API key is available', async () => {
             // setup
             const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
-            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+            jest.mocked(https.get).mockImplementation(((_, __, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 418
                 callback(response)
@@ -301,7 +304,7 @@ describe('MichelBackService', () => {
             // setup
             const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
             let capturedRequest: any
-            jest.mocked(https.get).mockImplementation(((url, options, callback) => {
+            jest.mocked(https.get).mockImplementation(((_, __, ___) => {
                 capturedRequest = createMockHttpsRequest()
                 // Simulate FaceIt accepting the connection but never responding:
                 // the socket goes idle and the request emits 'timeout'. Deferred

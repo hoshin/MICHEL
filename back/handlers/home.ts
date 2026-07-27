@@ -85,8 +85,6 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
     standings: {}
 }
 
-const CONFIGFILE_PATH = path.resolve(process.env.CONFIGFILE_PATH || './back/config.json')
-
 const FACEIT_PUBLIC_MODE_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
 
 // Browser User-Agent is mandatory on public FaceIt match endpoint (which 403s without it)
@@ -138,8 +136,9 @@ export class MichelBackService {
         )
 
         try {
-            this.logger.info({ msg: 'Config file present -> updating seriesData', path: CONFIGFILE_PATH})
-            const configFile = JSON.parse(fs.readFileSync(CONFIGFILE_PATH).toString())
+            const configFilePath = path.resolve(process.env.CONFIGFILE_PATH || __dirname+'/../config.json')
+            this.logger.info({ msg: 'Config file present -> updating seriesData', path: configFilePath})
+            const configFile = JSON.parse(fs.readFileSync(configFilePath).toString())
             const jsonSeriesConfigurationFromFile: SeriesData = configFile.seriesData
             this.seriesData = jsonSeriesConfigurationFromFile
             this.faceItApiKeyFromConfigFile = jsonSeriesConfigurationFromFile?.faceIt?.apiKey
