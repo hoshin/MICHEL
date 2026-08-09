@@ -5,6 +5,7 @@ import {EventEmitter} from 'events'
 import {DEFAULT_SERIES_DATA, MichelBackService, SeriesData} from "./home";
 import {Response as ExpressResponse} from 'express'
 import Mock = jest.Mock;
+import {Logger} from "pino";
 
 jest.mock('https', () => ({
     get: jest.fn(),
@@ -59,7 +60,14 @@ describe('MichelBackService', () => {
     let michelBackService: MichelBackService
     const originalFaceItKey = process.env.FACEIT_KEY
     const originalConfigFilePath = process.env.CONFIGFILE_PATH
-
+    const mockedLogger = {
+        debug: fn(),
+        error: fn(),
+        fatal: fn(),
+        info: fn(),
+        trace: fn(),
+        warn: fn(),
+    } as unknown as Logger
     describe('initialMatchDataFromFaceItMatchId', () => {
         beforeEach(() => {
             const connectionPool = []
@@ -68,7 +76,7 @@ describe('MichelBackService', () => {
             jest.mocked(https.get).mockReset()
             process.env.FACEIT_KEY = ''
             process.env.CONFIGFILE_PATH = 'bogus/path' // fake path to force using an inexploitable config file
-            michelBackService = new MichelBackService(connectionPool, false)
+            michelBackService = new MichelBackService(connectionPool, false, undefined, mockedLogger)
         })
 
         afterAll(() => {
@@ -448,6 +456,28 @@ describe('MichelBackService', () => {
             await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
             // assert
             expect(nextMock).toHaveBeenCalled()
+        })
+
+        it('should still call next when the fetched payload contains no tickets (hence no hero ban votes) AND should NOT throw a ban retrieval error', async () => {
+            // setup
+            const nextMock = fn()
+            mockHttpsByUrl([
+                {
+                    match: 'www.faceit.com/api/democracy/v1',
+                    statusCode: 200,
+                    body: {
+                        payload: {},
+                    },
+                },
+            ])
+            // action
+            await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
+            // assert
+            expect(nextMock).toHaveBeenCalled()
+            expect(mockedLogger.error).not.toHaveBeenCalledWith(expect.objectContaining({
+                msg: 'Error fetching faceit match details (bans)'
+            }))
+            expect({...michelBackService.getSeriesData().standings}).toStrictEqual({})
         })
 
         // The history endpoint tells us WHICH heroes were banned (their guids)

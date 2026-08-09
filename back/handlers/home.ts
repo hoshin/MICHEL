@@ -122,7 +122,7 @@ export class MichelBackService {
             options: { destination: `${process.env.MICH_LOG_PATH}/app.log` },
         })
 
-        this.logger = pino(
+        this.logger = logger || pino(
             {
                 level: process.env.PINO_LOG_LEVEL || 'info',
                 formatters: {
@@ -681,7 +681,7 @@ export class MichelBackService {
         }
 
         try {
-            const heroVotingPerMap = jsonData?.payload?.tickets.filter(ticket => ticket.entity_type === 'heroes')
+            const heroVotingPerMap = jsonData?.payload?.tickets?.filter(ticket => ticket.entity_type === 'heroes')
             this.logger.info({
                 msg: 'UpdateLobbyDataFromFaceItMatchId',
                 map: mapNumber-1,
