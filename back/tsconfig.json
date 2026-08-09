@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "es2015",
+    "module": "esnext",
     "esModuleInterop": true,
     "target": "es2015",
     "moduleResolution": "bundler",
