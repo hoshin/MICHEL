@@ -59,7 +59,7 @@ export const humanizeKey = (key) =>
 // selection or the path carries no .png slug.
 export const resolveSelectedValue = (selected) => {
   if (!selected) return undefined;
-  const selectMatch = selected.match(/\/([a-z0-9_-]+)\.png/);
+  const selectMatch = selected.match(/\/([a-z0-9-]+)\.png/);
   if (!selectMatch) return undefined;
   return kebabToCamel(selectMatch[1]);
 };

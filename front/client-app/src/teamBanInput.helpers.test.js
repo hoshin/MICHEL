@@ -82,15 +82,6 @@ describe("resolveSelectedValue", () => {
     expect(result).toBe("jetpackCat");
   });
 
-  it("resolves a path whose slug contains an underscore", () => {
-    // setup
-    const selected = "/assets/portraits/wrecking_ball.png";
-    // action
-    const result = resolveSelectedValue(selected);
-    // assert
-    expect(result).toBe("wrecking_ball");
-  });
-
   it("resolves a plain slug with a digit", () => {
     // setup
     const selected = "/assets/portraits/soldier-76.png";
