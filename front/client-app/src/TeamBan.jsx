@@ -1,4 +1,4 @@
-import { portraits } from "./TeamBanInput.jsx";
+import { portraitsKeyedByLowerCaseNames } from "./teamBanInput.helpers.js";
 import { useTeamsData } from "./teamsDataSocket.ts";
 
 function TeamBan(props) {
@@ -6,7 +6,7 @@ function TeamBan(props) {
   const matchIndex = `match${teamsData.display.mapCount}`;
   const currentRound = teamsData.standings[matchIndex];
   const currentRoundBanForTeam = currentRound.bans[`team${props.team}`];
-  return <img src={portraits[currentRoundBanForTeam.heroImage]} />;
+  return <img src={portraitsKeyedByLowerCaseNames[currentRoundBanForTeam.heroImage]} />;
 }
 
 export default TeamBan;
