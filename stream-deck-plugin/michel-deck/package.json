@@ -6,10 +6,8 @@
     "license": "CC-BY-NC",
     "scripts": {
         "build": "rollup -c",
-        "package:bash": "npx streamdeck pack -o ../../dist/streamdeck-plugin/ --version $npm_package_version.0 ./com.hoshin-casts.michel-deck.sdPlugin",
-        "package:win": "npx streamdeck pack -o ../../dist/streamdeck-plugin/ --version %npm_package_version%.0 ./com.hoshin-casts.michel-deck.sdPlugin",
-        "build-and-package:bash": "npm run build && npm run package:bash",
-        "build-and-package:win": "npm run build && npm run package:win" ,
+        "package": "npx streamdeck pack -o ../../dist/streamdeck-plugin/ ./com.hoshin-casts.michel-deck.sdPlugin",
+        "build-and-package": "npm run build && npm run package",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.hoshin-casts.michel-deck\""
     },
     "type": "module",
