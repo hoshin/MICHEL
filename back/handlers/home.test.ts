@@ -90,6 +90,30 @@ describe('MichelBackService', () => {
             process.env.CONFIGFILE_PATH = originalConfigFilePath
         })
 
+        it('should ignore non-string payloads without throwing or hitting the network', async () => {
+            // setup
+            const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
+            const httpsGetMock = spyOn(https, 'get')
+            const malformedPayloads = [
+                ['match-id'],
+                {matchId: 'match-id'},
+                42,
+                true,
+            ] as unknown as string[]
+
+            // action
+            for (const malformedPayload of malformedPayloads) {
+                await michelBackService.initialMatchDataFromFaceItMatchId(
+                    res,
+                    malformedPayload,
+                )
+            }
+
+            // assert
+            expect(httpsGetMock).not.toHaveBeenCalled()
+            expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
+            expect(res.json).not.toHaveBeenCalled()
+        });
         it('should get team names and logos from the public FaceIt match endpoint', async () => {
             // setup
             const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse

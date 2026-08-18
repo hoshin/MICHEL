@@ -2,7 +2,7 @@ import * as fs from "fs"
 import * as https from "https"
 import {Response} from "express"
 
-import pino from 'pino'
+import pino from "pino"
 import type {Logger} from "pino"
 import * as path from "node:path"
 
@@ -611,8 +611,9 @@ export class MichelBackService {
         }
     }
 
-    initialMatchDataFromFaceItMatchId = async (res: Response, matchIdOrURL: string) => {
-        if (!matchIdOrURL) {
+    initialMatchDataFromFaceItMatchId = async (res: Response, matchIdOrURL: string,
+    ) => {
+        if (typeof matchIdOrURL !== "string" || !matchIdOrURL) {
             return
         }
         // if we are hopping to a new match, or just initializing, we don't want any remnants of a previous match
@@ -998,7 +999,6 @@ export class MichelBackService {
         // We still broadcast once if no fetch was triggered so the scenes
         // see all the other applied fields immediately.
         if (!matchIdTriggeredFetch) {
-
             this.sendUpdatedStateToCaller(res)
         } else if (res && !res.headersSent) {
             // Echo current state back to the HTTP caller (if any) without
