@@ -1,6 +1,6 @@
 import { Select } from "antd";
 import {
-  portraits,
+  portraitsKeyedByLowerCaseNames,
   humanizeKey,
   resolveSelectedValue,
 } from "./teamBanInput.helpers.js";
@@ -11,7 +11,7 @@ const updateBanForTeam = (value, team, handler) => {
 };
 
 function TeamBanInput(props) {
-  const nameOptions = Object.keys(portraits)
+  const nameOptions = Object.keys(portraitsKeyedByLowerCaseNames)
     .map((name) => ({
       value: name,
       label: humanizeKey(name),

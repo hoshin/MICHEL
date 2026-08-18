@@ -10,9 +10,9 @@ const portraitModules = import.meta.glob("./assets/portraits/*.png", {
   import: "default",
 });
 
-// "jetpack-cat" -> "jetpackCat", "soldier-76" -> "soldier76", "d-va" -> "dva"
-export const kebabToCamel = (slug) =>
-  slug.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+// "jetpack-cat" -> "jetpackcat", "soldier-76" -> "soldier76", "d-va" -> "dva"
+export const stripDashesAndUpperCase = (slug) =>
+  slug.replace(/-([a-z0-9])/g, (_, c) => c.toLowerCase());
 
 const filenameToSlug = (path) =>
   path
@@ -25,11 +25,11 @@ const filenameToSlug = (path) =>
 // a new portrait needs an alias (e.g. "D.Va", "Soldier: 76", ...).
 const displayNameAliases = {};
 
-export const portraits = (() => {
+export const portraitsKeyedByLowerCaseNames = (() => {
   const result = {};
 
   for (const [path, url] of Object.entries(portraitModules)) {
-    result[kebabToCamel(filenameToSlug(path))] = url;
+    result[stripDashesAndUpperCase(filenameToSlug(path))] = url;
   }
 
   for (const [displayName, key] of Object.entries(displayNameAliases)) {
@@ -52,14 +52,23 @@ export const humanizeKey = (key) =>
     // Capitalize the first letter of each whitespace-separated word.
     .replace(/(^|\s)([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
 
-// Resolve the antd option `value` for a currently-selected ban path. The
-// `selected` value is an asset URL such as "/assets/portraits/jetpack-cat.png";
-// we pull out the filename slug and camel-case it so it lines up with the
-// option `value`s built from `portraits`. Returns undefined when there is no
-// selection or the path carries no .png slug.
+/** Resolve the antd option `value` for a currently-selected ban path.
+ * We try to retrieve the value in 2 different ways :
+ *   * Dev mode: We find a matching URL logo
+ *   * "Vite production mode": we cannot rely on the 1st method and match using the name of the banned hero by ectracting their name from the selected URL
+ * @selected asset URL (=> `teamBanLogo` which is a URL)
+ * @returns undefined when there is no selection or the path carries
+ * no .png slug.
+ * @note In production setup, Vite hashes asset filenames (basically adds a suffix to the original filename, before the extension)
+ * @note [18/8/26] This is a lot of hassle for no real benefit, as well as creating a relationship between a hero name and the portrait image name => we should update the components to just use the hero name / a set slug
+ */
 export const resolveSelectedValue = (selected) => {
   if (!selected) return undefined;
+  const exactKey = Object.keys(portraitsKeyedByLowerCaseNames).find(
+    (key) => portraitsKeyedByLowerCaseNames[key] === selected,
+  );
+  if (exactKey) return exactKey;
   const selectMatch = selected.match(/\/([a-z0-9-]+)\.png/);
   if (!selectMatch) return undefined;
-  return kebabToCamel(selectMatch[1]);
+  return stripDashesAndUpperCase(selectMatch[1]);
 };

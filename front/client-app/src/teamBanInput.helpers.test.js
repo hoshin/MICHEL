@@ -1,25 +1,26 @@
 import { describe, it, expect } from "vitest";
 import {
-  kebabToCamel,
+  stripDashesAndUpperCase,
   humanizeKey,
   resolveSelectedValue,
+  portraitsKeyedByLowerCaseNames,
 } from "./teamBanInput.helpers.js";
 
-describe("kebabToCamel", () => {
+describe("stripDashesAndUpperCase", () => {
   it("camel-cases a single kebab segment", () => {
     // setup
     const slug = "jetpack-cat";
     // action
-    const result = kebabToCamel(slug);
+    const result = stripDashesAndUpperCase(slug);
     // assert
-    expect(result).toBe("jetpackCat");
+    expect(result).toBe("jetpackcat");
   });
 
   it("camel-cases a kebab segment followed by a digit", () => {
     // setup
     const slug = "soldier-76";
     // action
-    const result = kebabToCamel(slug);
+    const result = stripDashesAndUpperCase(slug);
     // assert
     expect(result).toBe("soldier76");
   });
@@ -28,7 +29,7 @@ describe("kebabToCamel", () => {
     // setup
     const slug = "ana";
     // action
-    const result = kebabToCamel(slug);
+    const result = stripDashesAndUpperCase(slug);
     // assert
     expect(result).toBe("ana");
   });
@@ -79,7 +80,7 @@ describe("resolveSelectedValue", () => {
     // action
     const result = resolveSelectedValue(selected);
     // assert
-    expect(result).toBe("jetpackCat");
+    expect(result).toBe("jetpackcat");
   });
 
   it("resolves a plain slug with a digit", () => {
@@ -98,5 +99,29 @@ describe("resolveSelectedValue", () => {
     const result = resolveSelectedValue(selected);
     // assert
     expect(result).toBeUndefined();
+  });
+
+  it("resolves the key whose portraits URL exactly matches the selection", () => {
+    // setup
+    const selected = portraitsKeyedByLowerCaseNames.jetpackcat;
+    // action
+    const result = resolveSelectedValue(selected);
+    // assert
+    expect(result).toBe("jetpackcat");
+  });
+
+  it("resolves a production-style hashed portrait URL via exact match", () => {
+    // setup
+    const selected = portraitsKeyedByLowerCaseNames.jetpackcat;
+    const hashed = selected.replace(/\.png$/, ".a1b2c3d4.png");
+    portraitsKeyedByLowerCaseNames.__hashedFixture = hashed;
+    try {
+      // action
+      const result = resolveSelectedValue(hashed);
+      // assert
+      expect(result).toBe("__hashedFixture");
+    } finally {
+      delete portraitsKeyedByLowerCaseNames.__hashedFixture;
+    }
   });
 });

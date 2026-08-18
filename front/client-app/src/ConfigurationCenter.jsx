@@ -5,7 +5,7 @@ import CountdownTimer from "./components/CountdownTimer.jsx";
 
 import "./ConfigurationCenter.css";
 import { DEFAULT_LOGO, FACEIT_LOGO } from "./config.js";
-import { portraits } from "./teamBanInput.helpers.js";
+import { portraitsKeyedByLowerCaseNames } from "./teamBanInput.helpers.js";
 import {
   Button,
   Card,
@@ -59,19 +59,19 @@ export function copyURI(evt) {
 function portraitFromFaceItHeroName(heroName) {
   const lowercaseHeroName = heroName.toLowerCase();
   if (lowercaseHeroName.startsWith("junker")) {
-    return portraits.junkerQueen;
+    return portraitsKeyedByLowerCaseNames.junkerqueen;
   }
   if (lowercaseHeroName.startsWith("soldier")) {
-    return portraits.soldier76;
+    return portraitsKeyedByLowerCaseNames.soldier76;
   }
   if (lowercaseHeroName.startsWith("wreck")) {
-    return portraits.wreckingBall;
+    return portraitsKeyedByLowerCaseNames.wreckingball;
   }
   if (lowercaseHeroName.startsWith("jetpack")) {
-    return portraits.jetpackCat;
+    return portraitsKeyedByLowerCaseNames.jetpackcat;
   }
 
-  return portraits[lowercaseHeroName];
+  return portraitsKeyedByLowerCaseNames[lowercaseHeroName];
 }
 
 export function srcFromTeamBanName(source) {
@@ -79,7 +79,7 @@ export function srcFromTeamBanName(source) {
     if (source.heroImage.match(/^http[s]?.*/)) {
       return portraitFromFaceItHeroName(source.heroName);
     }
-    return portraits[source.heroImage];
+    return portraitsKeyedByLowerCaseNames[source.heroImage];
   }
   return null;
 }
