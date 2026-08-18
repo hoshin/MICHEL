@@ -1,10 +1,11 @@
 import * as fs from "fs"
-import * as https from "https"
 import {Response} from "express"
 
 import pino from "pino"
 import type {Logger} from "pino"
 import * as path from "node:path"
+
+import {FaceItClient} from "../lib/faceItClient.js"
 
 type TeamDescription = {
     name: string,
@@ -85,20 +86,6 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
     standings: {}
 }
 
-const FACEIT_PUBLIC_MODE_BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
-
-// Browser User-Agent is mandatory on public FaceIt match endpoint (which 403s without it)
-// and harmless elsewhere; keeping it in all headers for consistency, and in case FaceIt's
-// policy starts requiring it for other endpoints
-const FACEIT_PUBLIC_MODE_BASE_HTTP_HEADERS: Record<string, string> = {
-    'Accept': 'application/json',
-    'User-Agent': FACEIT_PUBLIC_MODE_BROWSER_USER_AGENT,
-}
-
-// Unknown when FaceIt might decide to terminate a hanging connexion,
-// so we ensure we purposefully do it after this timeout on our end
-const FACEIT_CLIENT_HTTP_TIMEOUT_MS = 15000
-
 process.env.MICH_LOG_PATH='./'
 
 export class MichelBackService {
@@ -107,13 +94,14 @@ export class MichelBackService {
     private seriesData: SeriesData
     private logger: Logger
     private faceItApiKeyFromConfigFile: string | undefined
+    private faceItClient: FaceItClient
     // Server-owned 1 s tick for the countdown. We hold a reference here so
     // that pause / reset / a new start can replace any running interval
     // without leaking timers. Reset to null whenever the countdown stops.
     // Centralized to allow multiple views to share the same countdown timer and guarantee sync
     private countdownTimer: ReturnType<typeof setInterval> | null = null
 
-    constructor(connectionPool, debug: boolean, seriesData?: SeriesData, logger?: Logger) {
+    constructor(connectionPool, debug: boolean, seriesData?: SeriesData, logger?: Logger, faceItClient?: FaceItClient) {
         this.connectionPool = connectionPool
         this.seriesData = seriesData ?? structuredClone(DEFAULT_SERIES_DATA)
         this.debug = debug
@@ -148,6 +136,11 @@ export class MichelBackService {
                 error: error.message
             })
         }
+
+        this.faceItClient = faceItClient ?? new FaceItClient({
+            logger: this.logger,
+            configFileApiKey: this.faceItApiKeyFromConfigFile,
+        })
     }
 
     updateConnectionPool(socket) {
@@ -492,125 +485,6 @@ export class MichelBackService {
         }
     }
 
-    private extractFaceItMatchId = (matchIdOrURL: string): string => {
-        const withoutQueryOrHash = matchIdOrURL.split(/[?#]/)[0]
-        const segments = withoutQueryOrHash.split('/').filter(segment => segment.length > 0)
-        return segments.find(segment => /^\d+-[0-9a-f-]+$/i.test(segment)) ?? segments.pop() ?? ''
-    }
-
-    /**
-     * Every FaceIt call goes through this single Node https.get client.
-     * The www.faceit.com match endpoint looks gated by a WAF that inspects BOTH the User-Agent
-     * (403 without the browser UA) AND the TLS/connection fingerprint. Empirically, Node's
-     * https stack clears that fingerprint check while fetch/undici does not,
-     * so the whole-application choice of https.get over fetch is load-bearing.
-     * Consolidating all FaceIt calls (API or public mode) through a single client
-     * should hopefully prevent other similar issues... and will make things easier to maintain
-     */
-    private getJsonUsingNodeHttps = (url: string, extraHeaders: Record<string, string> = {}): Promise<any> => new Promise((resolve, reject) => {
-        const request = https.get(url, {
-            headers: {
-                ...FACEIT_PUBLIC_MODE_BASE_HTTP_HEADERS,
-                ...extraHeaders,
-            },
-        }, response => {
-            let responseBody = ''
-
-            response.on('data', chunk => {
-                responseBody += chunk
-            })
-
-            response.on('end', () => {
-                if (response.statusCode !== 200) {
-                    reject(new Error(`Response status not 200 : ${response.statusCode}`))
-                    return
-                }
-
-                try {
-                    resolve(JSON.parse(responseBody))
-                } catch (error) {
-                    reject(error)
-                }
-            })
-        })
-
-        // In case FaceIt times out late / never
-        // Arm an idle timeout and destroy the request when it
-        // fires; destroy(err) re-emits 'error', which the handler below turns
-        // into the single rejection path.
-        request.setTimeout(FACEIT_CLIENT_HTTP_TIMEOUT_MS)
-        request.on('timeout', () => {
-            request.destroy(new Error(`FaceIt request timed out after ${FACEIT_CLIENT_HTTP_TIMEOUT_MS} ms`))
-        })
-
-        request.on('error', reject)
-    })
-
-    // Runtime env var wins so operators can override without editing the
-    // config file; environment variable always supersedes configuration
-    private effectiveFaceItApiKey = (): string | undefined =>
-        process.env.FACEIT_KEY || this.faceItApiKeyFromConfigFile
-
-    private getAuthenticatedAPIFaceItMatchData = async (matchId: string, key: string | undefined): Promise<any> => {
-        if (!key) {
-            throw new Error('No FaceIt API key available for authenticated fallback')
-        }
-
-        return this.getJsonUsingNodeHttps(`https://open.faceit.com/data/v4/matches/${matchId}`, {
-            'Authorization': `Bearer ${key}`,
-        })
-    }
-
-    private normalizedPublicFaceItMatchData = (jsonData: any) => {
-        const matchData = jsonData?.payload
-        const faction1 = matchData?.teams?.faction1
-        const faction2 = matchData?.teams?.faction2
-        if (!faction1 || !faction2) {
-            throw new Error('Public FaceIt match data does not contain both teams')
-        }
-
-        const heroEntities = matchData?.matchCustom?.tree?.heroes?.values?.value ?? []
-        return {
-            raw: {
-                ...matchData,
-                voting: {
-                    ...matchData.voting,
-                    heroes: {
-                        ...matchData.voting?.heroes,
-                        entities: heroEntities,
-                    },
-                },
-            },
-            team1: faction1,
-            team2: faction2,
-        }
-    }
-
-    private normalizedAuthenticatedFaceItMatchData = (jsonData: any) => {
-        const faction1 = jsonData?.teams?.faction1
-        const faction2 = jsonData?.teams?.faction2
-        if (!faction1 || !faction2) {
-            throw new Error('Authenticated FaceIt match data does not contain both teams')
-        }
-
-        return {
-            raw: jsonData,
-            team1: faction1,
-            team2: faction2,
-        }
-    }
-
-    private getNormalizedFaceItMatchData = async (matchId: string) => {
-        try {
-            const publicJsonData = await this.getJsonUsingNodeHttps(`https://www.faceit.com/api/match/v2/match/${matchId}`)
-            return this.normalizedPublicFaceItMatchData(publicJsonData)
-        } catch (publicError) {
-            this.logger.warn({msg:'Public FaceIt match data query failed. Attempting authenticated API call.', error: publicError.message})
-            const authenticatedJsonData = await this.getAuthenticatedAPIFaceItMatchData(matchId, this.effectiveFaceItApiKey())
-            return this.normalizedAuthenticatedFaceItMatchData(authenticatedJsonData)
-        }
-    }
-
     initialMatchDataFromFaceItMatchId = async (res: Response, matchIdOrURL: string,
     ) => {
         if (typeof matchIdOrURL !== "string" || !matchIdOrURL) {
@@ -619,10 +493,10 @@ export class MichelBackService {
         // if we are hopping to a new match, or just initializing, we don't want any remnants of a previous match
         // (like bans) to stay in the standings, even if the fetch below ends up failing
         this.seriesData.standings = structuredClone(DEFAULT_SERIES_DATA.standings)
-        const matchId: string = this.extractFaceItMatchId(matchIdOrURL)
+        const matchId: string = FaceItClient.extractMatchId(matchIdOrURL)
 
         try {
-            const faceItMatchData = await this.getNormalizedFaceItMatchData(matchId)
+            const faceItMatchData = await this.faceItClient.getNormalizedMatchData(matchId)
             this.logger.info({
                 msg: 'FaceIt match data querying',
                 faceItMatchData: {
@@ -680,9 +554,9 @@ export class MichelBackService {
             return
         }
 
-        let jsonData: any
+        let historyPayload: any
         try {
-            jsonData = await this.getJsonUsingNodeHttps(`https://www.faceit.com/api/democracy/v1/match/${matchId}/history`)
+            historyPayload = await this.faceItClient.getLobbyHistory(matchId)
         } catch (error) {
             this.logger.error({
                 msg: `Could not update lobby data using FaceIt match id ${matchId}`,
@@ -693,73 +567,29 @@ export class MichelBackService {
         }
 
         try {
-            const heroVotingPerMap = jsonData?.payload?.tickets?.filter(ticket => ticket.entity_type === 'heroes')
             this.logger.info({
                 msg: 'UpdateLobbyDataFromFaceItMatchId',
                 map: mapNumber-1,
             })
-            // mapNumber => [1, +Infinity[
-            const votesForMap = heroVotingPerMap?.[mapNumber - 1]
-            const votesForMapHasEntities = votesForMap?.entities && votesForMap.entities.length > 0
-            if (votesForMap !== undefined && !votesForMapHasEntities) {
-                this.logger.info({ msg: 'votesForMap has no entities'})
+
+            // The history endpoint carries only hero guids; the display data
+            // (image/name) lives in faceIt.raw.voting.heroes.entities, populated
+            // by the initial match lookup. When there are bans to resolve but
+            // that display data is missing, re-trigger the lookup and MUST await
+            // it before the ban extraction can succeed.
+            const hasBansToResolve = this.faceItClient.hasBanVotesForMap(historyPayload, mapNumber)
+            if (hasBansToResolve && !this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
+                this.logger.info({ msg: 'Hero display data missing for ban extraction => requerying' })
+                await this.initialMatchDataFromFaceItMatchId(null, matchId)
             }
-            if (votesForMapHasEntities) {
-                const bannedHeroes = votesForMap.entities.filter((voteEntity) => voteEntity.status === 'drop').map((bannedPick) => ({
-                    guid: bannedPick.guid,
-                    selected_by: bannedPick.selected_by,
-                    round: bannedPick.round,
-                }))
-                this.logger.info({
-                    msg: 'list of banned heroes',
-                    bannedHeroes: bannedHeroes,
-                })
-                const heroesGuidsToLookup = bannedHeroes.map(heroBan => heroBan.guid)
-                this.logger.info({
-                    msg: 'list of Hero guids to lookup',
-                    heroesGuidsToLookup: heroesGuidsToLookup,
-                })
-                let filteredHeroDataForMap
-                if(!this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
-                    // force lookup
-                    this.logger.info({
-                        msg: 'Not all required data for votes is present => requerying',
-                        length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
-                        entities: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities,
-                        heroes: this.seriesData?.faceIt?.raw?.voting?.heroes,
-                        voting: this.seriesData?.faceIt?.raw?.voting,
-                        raw: this.seriesData?.faceIt?.raw
-                    })
 
-                    await this.initialMatchDataFromFaceItMatchId(null, matchId)
-                }
-                if(this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length > 0) {
-                    filteredHeroDataForMap = this.seriesData.faceIt.raw.voting.heroes.entities.filter(entity => heroesGuidsToLookup.includes(entity.guid))
-                    this.logger.info({
-                        msg: 'have a list of heroes we can filter for target map',
-                        filteredHeroes: filteredHeroDataForMap,
-                    })
-                }
-                this.logger.info({msg:'filteredHeroDataForMap END, hopefully we hit an update branch before'})
-                const team1Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction1')[0]
-                const team2Ban = bannedHeroes.filter(ban => ban.selected_by === 'faction2')[0]
-
-                const heroDataForTeam1Ban = filteredHeroDataForMap.filter(ban => team1Ban.guid === ban.guid)[0]
-                const heroDataForTeam2Ban = filteredHeroDataForMap.filter(ban => team2Ban.guid === ban.guid)[0]
-                if (heroDataForTeam1Ban && heroDataForTeam2Ban) {
-                    this.seriesData.standings[`match${mapNumber}`] = {
-                        bans: {
-                            team1: {
-                                heroImage: heroDataForTeam1Ban.image_lg,
-                                heroName: heroDataForTeam1Ban.name
-                            },
-                            team2: {
-                                heroImage: heroDataForTeam2Ban.image_lg,
-                                heroName: heroDataForTeam2Ban.name
-                            }
-                        }
-                    }
-                }
+            const bans = this.faceItClient.extractBansForMap(
+                historyPayload,
+                this.seriesData?.faceIt?.raw?.voting?.heroes?.entities ?? [],
+                mapNumber,
+            )
+            if (bans) {
+                this.seriesData.standings[`match${mapNumber}`] = {bans}
             }
             next()
         } catch (error) {

@@ -8,7 +8,7 @@
     "outDir": "../dist/back",
     "removeComments": true
   },
-  "include": ["./index.ts", "./handlers/**/*.ts"],
-  "exclude": ["./**/*.test.ts"],
+  "include": ["./index.ts", "./handlers/**/*.ts", "./lib/**/*.ts"],
+  "exclude": ["./**/*.test.ts", "./**/testSupport/**"],
   "lib": ["es2015"]
 }

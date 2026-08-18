@@ -6,6 +6,7 @@ import {DEFAULT_SERIES_DATA, MichelBackService, SeriesData} from "./home";
 import {Response as ExpressResponse} from 'express'
 import Mock = jest.Mock;
 import {Logger} from "pino";
+import {FaceItClient} from "../lib/faceItClient";
 
 jest.mock('https', () => ({
     get: jest.fn().mockReturnValue(
@@ -429,7 +430,10 @@ describe('MichelBackService', () => {
             jest.restoreAllMocks()
             ;(global.fetch as any).mockRestore?.()
             jest.mocked(https.get).mockReset()
-            michelBackService = new MichelBackService(connectionPool, false)
+            // mockedLogger is shared across the suite; clear accumulated calls so
+            // "was not called with" assertions in this block can't see prior tests.
+            Object.values(mockedLogger as unknown as Record<string, Mock>).forEach((level) => level.mockClear?.())
+            michelBackService = new MichelBackService(connectionPool, false, undefined, mockedLogger)
         })
 
         it('should not try and fetch anything if no matchId is provided', async () => {
@@ -1132,83 +1136,22 @@ describe('MichelBackService', () => {
 
         const MATCH_ID = '1-9f898257-b66c-4a72-9295-1b6aef2cb672'
 
-        it('should extract the match id if a FaceIt room url was given, instead of a match ID', () => {
+        // Per-URL extraction is exhaustively unit-tested on FaceItClient.extractMatchId.
+        // Here we only guard the WIRING: the service must hand the extracted id to the
+        // FaceIt client rather than the raw room URL it received.
+        it('should extract the match id from a room url and pass it to the FaceIt client', () => {
             // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
+            const faceItClient = {
+                getNormalizedMatchData: fn(async () => ({raw: {}, team1: {}, team2: {}})),
+                getLobbyHistory: fn(),
+                extractBansForMap: fn(),
+                hasBanVotesForMap: fn(),
+            } as unknown as FaceItClient
+            const svc = new MichelBackService([], false, undefined, mockedLogger, faceItClient)
             // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}`)
+            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/scoreboard?foo=bar`)
             // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should be able to use a bare match id if provided', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url with a trailing slash', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url with a scoreboard suffix', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/scoreboard`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url carrying a query string', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}?foo=bar`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url carrying a hash fragment', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}#scoreboard`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+            expect(faceItClient.getNormalizedMatchData).toHaveBeenCalledWith(MATCH_ID)
         })
 
         const seriesDataWithStaleStandings = (): SeriesData => ({
@@ -1220,11 +1163,11 @@ describe('MichelBackService', () => {
 
         it('should wipe stale standings from a previous match once the new match data resolves', async () => {
             // setup
-            const svc = new MichelBackService([], false, seriesDataWithStaleStandings())
+            const faceItClient = {
+                getNormalizedMatchData: fn(async () => ({raw: {}, team1: {name: 'A'}, team2: {name: 'B'}})),
+            } as unknown as FaceItClient
+            const svc = new MichelBackService([], false, seriesDataWithStaleStandings(), mockedLogger, faceItClient)
             jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {teams: {faction1: {name: 'A'}, faction2: {name: 'B'}}}
             })
             // action
             await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
@@ -1234,12 +1177,13 @@ describe('MichelBackService', () => {
 
         it('should wipe stale standings even when the new match fetch fails', async () => {
             // setup
-            const svc = new MichelBackService([], false, seriesDataWithStaleStandings())
+            const faceItClient = {
+                getNormalizedMatchData: fn(async () => {
+                    throw new Error('fetch failed')
+                }),
+            } as unknown as FaceItClient
+            const svc = new MichelBackService([], false, seriesDataWithStaleStandings(), mockedLogger, faceItClient)
             jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            jest.spyOn(global, 'fetch').mockResolvedValue({status: 418, json: () => Promise.resolve({})} as Response)
-            spyOn(svc as any, 'getJsonUsingNodeHttps').mockRejectedValue({
-                status: 418,
             })
             // action
             await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
