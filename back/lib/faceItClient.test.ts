@@ -7,13 +7,7 @@ import {FaceItClient} from './faceItClient'
 import {createMockHttpsRequest, mockHttpsByUrl} from './testSupport/mockHttps'
 
 jest.mock('https', () => ({
-    get: jest.fn().mockReturnValue(
-        {
-            setTimeout: fn,
-            destroy: fn,
-            on: fn,
-        }
-    ),
+    get: jest.fn(),
 }))
 
 const BROWSER_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'
@@ -59,7 +53,7 @@ describe('FaceItClient', () => {
             jest.restoreAllMocks()
             ;(global.fetch as any).mockRestore?.()
             jest.mocked(https.get).mockReset()
-            process.env.FACEIT_KEY = ''
+            process.env.FACEIT_KEY = 'some-key'
             client = new FaceItClient({logger: mockedLogger})
         })
 
@@ -73,14 +67,21 @@ describe('FaceItClient', () => {
                 payload: {
                     teams: {
                         faction1: {name: 'Moominhouse', avatar: 'https://distribution.faceit-cdn.net/moominhouse.jpg'},
-                        faction2: {name: 'ELMT Thunder', avatar: 'https://distribution.faceit-cdn.net/elmt-thunder.jpg'},
+                        faction2: {
+                            name: 'ELMT Thunder',
+                            avatar: 'https://distribution.faceit-cdn.net/elmt-thunder.jpg'
+                        },
                     },
                     matchCustom: {
                         tree: {
                             heroes: {
                                 values: {
                                     value: [
-                                        {guid: '0x02E000000000007A', name: 'DVa', image_lg: 'https://assets.faceit-cdn.net/dva.jpeg'},
+                                        {
+                                            guid: '0x02E000000000007A',
+                                            name: 'DVa',
+                                            image_lg: 'https://assets.faceit-cdn.net/dva.jpeg'
+                                        },
                                     ],
                                 },
                             },
@@ -108,8 +109,14 @@ describe('FaceItClient', () => {
                     'User-Agent': BROWSER_USER_AGENT,
                 },
             }, expect.any(Function))
-            expect(matchData.team1).toMatchObject({name: 'Moominhouse', avatar: 'https://distribution.faceit-cdn.net/moominhouse.jpg'})
-            expect(matchData.team2).toMatchObject({name: 'ELMT Thunder', avatar: 'https://distribution.faceit-cdn.net/elmt-thunder.jpg'})
+            expect(matchData.team1).toMatchObject({
+                name: 'Moominhouse',
+                avatar: 'https://distribution.faceit-cdn.net/moominhouse.jpg'
+            })
+            expect(matchData.team2).toMatchObject({
+                name: 'ELMT Thunder',
+                avatar: 'https://distribution.faceit-cdn.net/elmt-thunder.jpg'
+            })
             expect(matchData.raw.voting.heroes.entities).toEqual([
                 {guid: '0x02E000000000007A', name: 'DVa', image_lg: 'https://assets.faceit-cdn.net/dva.jpeg'},
             ])
@@ -127,10 +134,24 @@ describe('FaceItClient', () => {
                     statusCode: 200,
                     body: {
                         teams: {
-                            faction1: {name: 'Authenticated Alpha', avatar: 'https://distribution.faceit-cdn.net/auth-alpha.jpg'},
-                            faction2: {name: 'Authenticated Bravo', avatar: 'https://distribution.faceit-cdn.net/auth-bravo.jpg'},
+                            faction1: {
+                                name: 'Authenticated Alpha',
+                                avatar: 'https://distribution.faceit-cdn.net/auth-alpha.jpg'
+                            },
+                            faction2: {
+                                name: 'Authenticated Bravo',
+                                avatar: 'https://distribution.faceit-cdn.net/auth-bravo.jpg'
+                            },
                         },
-                        voting: {heroes: {entities: [{guid: 'hero-guid', name: 'Ana', image_lg: 'https://assets.faceit-cdn.net/ana.jpeg'}]}},
+                        voting: {
+                            heroes: {
+                                entities: [{
+                                    guid: 'hero-guid',
+                                    name: 'Ana',
+                                    image_lg: 'https://assets.faceit-cdn.net/ana.jpeg'
+                                }]
+                            }
+                        },
                     },
                 },
             ])
@@ -144,12 +165,26 @@ describe('FaceItClient', () => {
                 headers: {Accept: 'application/json', 'User-Agent': BROWSER_USER_AGENT},
             }, expect.any(Function))
             expect(httpsGetMock).toHaveBeenCalledWith('https://open.faceit.com/data/v4/matches/match-id', {
-                headers: {Accept: 'application/json', Authorization: 'Bearer faceit-api-key', 'User-Agent': BROWSER_USER_AGENT},
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: 'Bearer faceit-api-key',
+                    'User-Agent': BROWSER_USER_AGENT
+                },
             }, expect.any(Function))
             expect(fetchMock).not.toHaveBeenCalled()
-            expect(matchData.team1).toMatchObject({name: 'Authenticated Alpha', avatar: 'https://distribution.faceit-cdn.net/auth-alpha.jpg'})
-            expect(matchData.team2).toMatchObject({name: 'Authenticated Bravo', avatar: 'https://distribution.faceit-cdn.net/auth-bravo.jpg'})
-            expect(matchData.raw.voting.heroes.entities).toEqual([{guid: 'hero-guid', name: 'Ana', image_lg: 'https://assets.faceit-cdn.net/ana.jpeg'}])
+            expect(matchData.team1).toMatchObject({
+                name: 'Authenticated Alpha',
+                avatar: 'https://distribution.faceit-cdn.net/auth-alpha.jpg'
+            })
+            expect(matchData.team2).toMatchObject({
+                name: 'Authenticated Bravo',
+                avatar: 'https://distribution.faceit-cdn.net/auth-bravo.jpg'
+            })
+            expect(matchData.raw.voting.heroes.entities).toEqual([{
+                guid: 'hero-guid',
+                name: 'Ana',
+                image_lg: 'https://assets.faceit-cdn.net/ana.jpeg'
+            }])
         })
 
         it('should fall back to the authenticated endpoint when the public payload lacks both teams', async () => {
@@ -157,11 +192,20 @@ describe('FaceItClient', () => {
             process.env.FACEIT_KEY = 'faceit-api-key'
             client = new FaceItClient({logger: mockedLogger})
             mockHttpsByUrl([
-                {match: 'www.faceit.com/api/match/v2', statusCode: 200, body: {payload: {teams: {faction1: {name: 'Only One Team'}}}}},
+                {
+                    match: 'www.faceit.com/api/match/v2',
+                    statusCode: 200,
+                    body: {payload: {teams: {faction1: {name: 'Only One Team'}}}}
+                },
                 {
                     match: 'open.faceit.com/data/v4/matches',
                     statusCode: 200,
-                    body: {teams: {faction1: {name: 'Fallback Alpha', avatar: 'fallback-alpha-logo'}, faction2: {name: 'Fallback Bravo', avatar: 'fallback-bravo-logo'}}},
+                    body: {
+                        teams: {
+                            faction1: {name: 'Fallback Alpha', avatar: 'fallback-alpha-logo'},
+                            faction2: {name: 'Fallback Bravo', avatar: 'fallback-bravo-logo'}
+                        }
+                    },
                 },
             ])
 
@@ -175,6 +219,7 @@ describe('FaceItClient', () => {
 
         it('should reject when the public endpoint fails and no API key is available', async () => {
             // setup
+            delete process.env.FACEIT_KEY
             mockHttpsByUrl([
                 {match: 'www.faceit.com/api/match/v2', statusCode: 418, body: {}},
             ])
@@ -183,6 +228,7 @@ describe('FaceItClient', () => {
             // action / assert
             await expect(client.getNormalizedMatchData('match-id')).rejects.toThrow('No FaceIt API key available for authenticated fallback')
             expect(fetchMock).not.toHaveBeenCalled()
+            process.env.FACEIT_KEY = originalFaceItKey
         })
 
         it('should reject when both public and authenticated endpoints fail', async () => {
@@ -220,7 +266,7 @@ describe('FaceItClient', () => {
         beforeEach(() => {
             jest.restoreAllMocks()
             jest.mocked(https.get).mockReset()
-            process.env.FACEIT_KEY = ''
+            delete process.env.FACEIT_KEY
             client = new FaceItClient({logger: mockedLogger})
         })
 
@@ -306,6 +352,36 @@ describe('FaceItClient', () => {
         it('should return null when hero display data is missing for a ban', () => {
             // action / assert
             expect(client.extractBansForMap(historyPayload, [], 1)).toBeNull()
+        })
+    })
+
+    // Note: not the best client setup tests, but should be enough to at least ensure we're doing
+    // something with the api key / http timeout configurations
+    describe('client setup (api key + timeout)', () => {
+        it('should use the provided configFileApiKey as the key for calls if it is passed to the constructor and there is no FACEIT_KEY env variable set', async () => {
+            // setup
+            delete process.env.FACEIT_KEY
+
+            const faceitClient = new FaceItClient({logger: mockedLogger, configFileApiKey: 'configured-api-key'})
+            spyOn(faceitClient as any, 'getJsonUsingNodeHttps').mockRejectedValue({status: 418, error: new Error('Trigger error to force attempting an authenticated call')})
+            spyOn(faceitClient as any, 'normalizedAuthenticatedMatchData').mockResolvedValue({} as any)
+            const getNormalizedDataMock = spyOn(faceitClient as any, 'getAuthenticatedMatchData').mockResolvedValue({} as any)
+            // action
+            await faceitClient.getNormalizedMatchData('1234-1234-1234')
+            // assert
+            expect(getNormalizedDataMock).toHaveBeenCalledWith('1234-1234-1234', 'configured-api-key')
+
+            // teardown
+            process.env.FACEIT_KEY = originalFaceItKey
+        })
+        it('should use, and prefer, the provided httpTimeoutMs as the reference timeout for calls instead of the default FACEIT_CLIENT_HTTP_TIMEOUT_MS', async () => {
+            // setup
+            const faceitClient = new FaceItClient({logger: mockedLogger, httpTimeoutMs: 44})
+            mockHttpsByUrl([
+                {match: 'https://www.faceit.com/api/democracy/v1/match/1234-1234-1234/history', statusCode: 200, body: {}},
+            ])
+            // action / assert
+            expect((faceitClient as any).httpTimeoutMs).toBe(44)
         })
     })
 })

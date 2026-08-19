@@ -81,7 +81,6 @@ export class FaceItClient {
             },
         }, response => {
             let responseBody = ''
-
             response.on('data', chunk => {
                 responseBody += chunk
             })
