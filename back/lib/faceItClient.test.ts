@@ -391,7 +391,7 @@ describe('FaceItClient', () => {
             const faceitClient = new FaceItClient({logger: mockedLogger, httpTimeoutMs: 44})
             mockHttpsByUrl([
                 {
-                    match: 'https://www.faceit.com/api/democracy/v1/match/1234-1234-1234/history',
+                    match: 'https://www.faceit.com/api/democracy/v1/match/1234-1234-1235/history',
                     statusCode: 200,
                     body: {}
                 },

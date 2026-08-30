@@ -87,11 +87,13 @@ export class FaceItClient {
             })
 
             response.on('error', error => {
+                this.logger.error({msg: 'FaceIt call ERROR', error: error.message})
                 reject(error)
             })
 
-            response.on('aborted', message => {
-                reject(message)
+            response.on('aborted', () => {
+                this.logger.error({msg: 'FaceIt call ABORTED', error: 'FaceIt call ABORTED (no further info)'})
+                reject(new Error('FaceIt call ABORTED (no further info)'))
             })
 
             response.on('end', () => {
