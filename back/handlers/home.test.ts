@@ -100,6 +100,7 @@ describe('MichelBackService', () => {
             const httpsGetMock = jest.mocked(https.get).mockImplementation(((url, options, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 200
+                response.setEncoding = fn()
                 callback(response)
                 response.emit('data', JSON.stringify(faceItMatchPayload))
                 response.emit('end')
@@ -522,6 +523,7 @@ describe('MichelBackService', () => {
                 const request = createMockHttpsRequest()
                 const emitResponse = (body: unknown) => {
                     const response = new EventEmitter() as any
+                    response.setEncoding = fn()
                     response.statusCode = 200
                     callback(response)
                     response.emit('data', JSON.stringify(body))
@@ -565,6 +567,88 @@ describe('MichelBackService', () => {
                     },
                 },
             })
+        })
+        it('should log an error and call `next` if any error got thrown during the retrieval process', async () => {
+            // setup
+            const nextMock = fn()
+            jest.spyOn((michelBackService as any).faceItClient, 'getLobbyHistory').mockResolvedValue({})
+            jest.spyOn((michelBackService as any).faceItClient, 'hasBanVotesForMap').mockImplementation(() => {
+                throw new Error('Foo Bar Baz Error')
+            })
+            // action
+            await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
+
+            // assert
+            expect(nextMock).toHaveBeenCalledTimes(1)
+            expect(mockedLogger.error).toHaveBeenCalledWith({
+                msg: 'Error fetching faceit match details (bans)',
+                error: 'Foo Bar Baz Error'
+            })
+        })
+
+        it('should keep series data that are not bans and just replace bans when called (in the event FaceIt data has already been initialized before)', async () => {
+            // setup
+            const nextMock = fn()
+            const seriesData = michelBackService.getSeriesData()
+            seriesData.faceIt = {
+                matchId: '',
+                raw: {
+                    voting: {
+                        heroes: {
+                            entities: [{}]
+                        }
+                    }
+                }
+            }
+            seriesData.standings[`match1`] = {
+                bans: {
+                    team1: {
+                        heroImage: 'dva.jpeg',
+                        heroName: 'DVa',
+                    },
+                    team2: {
+                        heroImage: 'soldier.jpeg',
+                        heroName: 'Soldier 76',
+                    }
+                },
+                map: {
+                    selectedBy: 'team1',
+                    image: 'suravasa.jpeg',
+                    name: 'Suravasa'
+                }
+            }
+            jest.spyOn((michelBackService as any).faceItClient, 'getLobbyHistory').mockResolvedValue({})
+            jest.spyOn((michelBackService as any).faceItClient, 'hasBanVotesForMap').mockReturnValue(true)
+            jest.spyOn((michelBackService as any).faceItClient, 'extractBansForMap').mockReturnValue(
+                {
+                    team1: {heroImage: 'emre.jpeg', heroName: 'Emre'},
+                    team2: {heroImage: 'domina.jpeg', heroName: 'Domina'}
+                }
+            )
+
+            // action
+            await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
+
+            // assert
+            expect(seriesData.standings[`match1`]).toStrictEqual(
+                {
+                    bans: {
+                        team1: {
+                            heroImage: 'emre.jpeg',
+                            heroName: 'Emre',
+                        },
+                        team2: {
+                            heroImage: 'domina.jpeg',
+                            heroName: 'Domina',
+                        }
+                    },
+                    map: {
+                        selectedBy: 'team1',
+                        image: 'suravasa.jpeg',
+                        name: 'Suravasa'
+                    }
+                }
+            )
         })
     })
     describe('teamUpdateBan', () => {

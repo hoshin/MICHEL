@@ -58,7 +58,9 @@ describe('FaceItClient', () => {
         })
 
         afterAll(() => {
-            process.env.FACEIT_KEY = originalFaceItKey
+            if (originalFaceItKey !== undefined) {
+                process.env.FACEIT_KEY = originalFaceItKey
+            }
         })
 
         it('should read team names, logos and hero entities from the public endpoint using https.get (not fetch)', async () => {
@@ -92,6 +94,7 @@ describe('FaceItClient', () => {
             const httpsGetMock = jest.mocked(https.get).mockImplementation(((url, options, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 200
+                response.setEncoding = fn()
                 callback(response)
                 response.emit('data', JSON.stringify(faceItMatchPayload))
                 response.emit('end')
@@ -228,7 +231,9 @@ describe('FaceItClient', () => {
             // action / assert
             await expect(client.getNormalizedMatchData('match-id')).rejects.toThrow('No FaceIt API key available for authenticated fallback')
             expect(fetchMock).not.toHaveBeenCalled()
-            process.env.FACEIT_KEY = originalFaceItKey
+            if (originalFaceItKey !== undefined) {
+                process.env.FACEIT_KEY = originalFaceItKey
+            }
         })
 
         it('should reject when both public and authenticated endpoints fail', async () => {
@@ -271,7 +276,9 @@ describe('FaceItClient', () => {
         })
 
         afterAll(() => {
-            process.env.FACEIT_KEY = originalFaceItKey
+            if (originalFaceItKey !== undefined) {
+                process.env.FACEIT_KEY = originalFaceItKey
+            }
         })
 
         it('should GET the democracy history endpoint with the browser headers', async () => {
@@ -363,7 +370,10 @@ describe('FaceItClient', () => {
             delete process.env.FACEIT_KEY
 
             const faceitClient = new FaceItClient({logger: mockedLogger, configFileApiKey: 'configured-api-key'})
-            spyOn(faceitClient as any, 'getJsonUsingNodeHttps').mockRejectedValue({status: 418, error: new Error('Trigger error to force attempting an authenticated call')})
+            spyOn(faceitClient as any, 'getJsonUsingNodeHttps').mockRejectedValue({
+                status: 418,
+                error: new Error('Trigger error to force attempting an authenticated call')
+            })
             spyOn(faceitClient as any, 'normalizedAuthenticatedMatchData').mockResolvedValue({} as any)
             const getNormalizedDataMock = spyOn(faceitClient as any, 'getAuthenticatedMatchData').mockResolvedValue({} as any)
             // action
@@ -372,13 +382,19 @@ describe('FaceItClient', () => {
             expect(getNormalizedDataMock).toHaveBeenCalledWith('1234-1234-1234', 'configured-api-key')
 
             // teardown
-            process.env.FACEIT_KEY = originalFaceItKey
+            if (originalFaceItKey !== undefined) {
+                process.env.FACEIT_KEY = originalFaceItKey
+            }
         })
         it('should use, and prefer, the provided httpTimeoutMs as the reference timeout for calls instead of the default FACEIT_CLIENT_HTTP_TIMEOUT_MS', async () => {
             // setup
             const faceitClient = new FaceItClient({logger: mockedLogger, httpTimeoutMs: 44})
             mockHttpsByUrl([
-                {match: 'https://www.faceit.com/api/democracy/v1/match/1234-1234-1234/history', statusCode: 200, body: {}},
+                {
+                    match: 'https://www.faceit.com/api/democracy/v1/match/1234-1234-1234/history',
+                    statusCode: 200,
+                    body: {}
+                },
             ])
             // action / assert
             expect((faceitClient as any).httpTimeoutMs).toBe(44)

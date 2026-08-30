@@ -86,7 +86,7 @@ export const DEFAULT_SERIES_DATA: SeriesData = {
     standings: {}
 }
 
-process.env.MICH_LOG_PATH='./'
+process.env.MICH_LOG_PATH = './'
 
 export class MichelBackService {
     private connectionPool: any
@@ -107,7 +107,7 @@ export class MichelBackService {
         this.debug = debug
         const fileTransport = pino.transport({
             target: 'pino/file',
-            options: { destination: `${process.env.MICH_LOG_PATH}/app.log` },
+            options: {destination: `${process.env.MICH_LOG_PATH}/app.log`},
         })
 
         this.logger = logger || pino(
@@ -115,7 +115,7 @@ export class MichelBackService {
                 level: process.env.PINO_LOG_LEVEL || 'info',
                 formatters: {
                     level: (label) => {
-                        return { level: label.toUpperCase() }
+                        return {level: label.toUpperCase()}
                     },
                 },
                 timestamp: pino.stdTimeFunctions.isoTime,
@@ -124,8 +124,8 @@ export class MichelBackService {
         )
 
         try {
-            const configFilePath = path.resolve(process.env.CONFIGFILE_PATH || __dirname+'/../config.json')
-            this.logger.info({ msg: 'Config file present -> updating seriesData', path: configFilePath})
+            const configFilePath = path.resolve(process.env.CONFIGFILE_PATH || __dirname + '/../config.json')
+            this.logger.info({msg: 'Config file present -> updating seriesData', path: configFilePath})
             const configFile = JSON.parse(fs.readFileSync(configFilePath).toString())
             const jsonSeriesConfigurationFromFile: SeriesData = configFile.seriesData
             this.seriesData = jsonSeriesConfigurationFromFile
@@ -515,7 +515,7 @@ export class MichelBackService {
 
             this.seriesData.faceIt.matchId = matchId
             this.seriesData.faceIt.raw = faceItMatchData.raw
-            if(this.debug){
+            if (this.debug) {
                 this.logger.info({
                     msg: '1st FaceIt match data querying (teams)',
                     length: this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length,
@@ -528,7 +528,7 @@ export class MichelBackService {
             this.sendUpdatedStateToCaller(res)
             return this.seriesData
         } catch (error) {
-            this.logger.error({msg:'FaceIt match data query failed', error})
+            this.logger.error({msg: 'FaceIt match data query failed', error})
             return this.seriesData
         }
     }
@@ -569,7 +569,7 @@ export class MichelBackService {
         try {
             this.logger.info({
                 msg: 'UpdateLobbyDataFromFaceItMatchId',
-                map: mapNumber-1,
+                map: mapNumber - 1,
             })
 
             // The history endpoint carries only hero guids; the display data
@@ -577,10 +577,11 @@ export class MichelBackService {
             // by the initial match lookup. When there are bans to resolve but
             // that display data is missing, re-trigger the lookup and MUST await
             // it before the ban extraction can succeed.
+            const faceItEntitiesAreAvailable = this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length
             const hasBansToResolve = this.faceItClient.hasBanVotesForMap(historyPayload, mapNumber)
-            if (hasBansToResolve && !this.seriesData?.faceIt?.raw?.voting?.heroes?.entities?.length) {
-                this.logger.info({ msg: 'Hero display data missing for ban extraction => requerying' })
-                await this.initialMatchDataFromFaceItMatchId(null, matchId)
+            if (hasBansToResolve && !faceItEntitiesAreAvailable) {
+                this.logger.info({msg: 'Hero display data missing for ban extraction => requerying'})
+                this.seriesData.faceIt.raw = (await this.faceItClient.getNormalizedMatchData(matchId)).raw
             }
 
             const bans = this.faceItClient.extractBansForMap(
@@ -589,11 +590,14 @@ export class MichelBackService {
                 mapNumber,
             )
             if (bans) {
-                this.seriesData.standings[`match${mapNumber}`] = {bans}
+                this.seriesData.standings[`match${mapNumber}`] = {
+                    ...this.seriesData.standings[`match${mapNumber}`],
+                    bans
+                }
             }
             next()
         } catch (error) {
-            this.logger.error({ msg: 'Error fetching faceit match details (bans)', error: error.message})
+            this.logger.error({msg: 'Error fetching faceit match details (bans)', error: error.message})
             next()
         }
     }
@@ -609,7 +613,7 @@ export class MichelBackService {
                 this.sendUpdatedStateToCaller(res)
             }
         } catch (error) {
-            this.logger.error( {msg:'Error fetching faceIt match updates:', error: error.message})
+            this.logger.error({msg: 'Error fetching faceIt match updates:', error: error.message})
             this.sendUpdatedStateToCaller(res)
         }
     }
@@ -633,7 +637,7 @@ export class MichelBackService {
         }
         this.seriesData.standings[`match${this.seriesData.display.mapCount}`].bans.team1.heroImage = bannedHeroName
         if (this.debug) {
-            this.logger.info({ msg: 'team1UpdateBan', bannedHeroName})
+            this.logger.info({msg: 'team1UpdateBan', bannedHeroName})
         }
         this.sendUpdatedStateToCaller(res)
     }
@@ -650,7 +654,7 @@ export class MichelBackService {
         }
         this.seriesData.standings[`match${this.seriesData.display.mapCount}`].bans.team2.heroImage = bannedHeroName
         if (this.debug) {
-            this.logger.info({ msg: 'team1UpdateBan', bannedHeroName})
+            this.logger.info({msg: 'team1UpdateBan', bannedHeroName})
         }
         this.sendUpdatedStateToCaller(res)
     }
@@ -684,7 +688,7 @@ export class MichelBackService {
         }
         this.seriesData.display.mapCount = sanitized
         if (this.debug) {
-            this.logger.info({ msg: 'setMapCount', mapCount: sanitized })
+            this.logger.info({msg: 'setMapCount', mapCount: sanitized})
         }
         this.sendUpdatedStateToCaller(res)
     }
@@ -820,7 +824,7 @@ export class MichelBackService {
             applyTeamField('team2', 'score', 0, isMeaningfulScore)
         }
 
-        this.logger.info({ msg: 'catchup', applied, skipped })
+        this.logger.info({msg: 'catchup', applied, skipped})
 
         // initialMatchDataFromFaceItMatchId triggers its own async broadcast
         // once the FaceIt fetch settles. If we also broadcast synchronously

@@ -81,8 +81,17 @@ export class FaceItClient {
             },
         }, response => {
             let responseBody = ''
+            response.setEncoding('utf8')
             response.on('data', chunk => {
                 responseBody += chunk
+            })
+
+            response.on('error', error => {
+                reject(error)
+            })
+
+            response.on('aborted', message => {
+                reject(message)
             })
 
             response.on('end', () => {

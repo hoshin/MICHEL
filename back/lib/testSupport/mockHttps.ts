@@ -41,6 +41,7 @@ export const mockHttpsByUrl = (routes: Array<{ match: string } & CannedHttpsResp
             return request
         }
         const response = new EventEmitter() as any
+        response.setEncoding = () => {}
         response.statusCode = route.statusCode
         callback(response)
         response.emit('data', typeof route.body === 'string' ? route.body : JSON.stringify(route.body))
