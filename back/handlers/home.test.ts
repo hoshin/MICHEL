@@ -6,61 +6,12 @@ import {DEFAULT_SERIES_DATA, MichelBackService, SeriesData} from "./home";
 import {Response as ExpressResponse} from 'express'
 import Mock = jest.Mock;
 import {Logger} from "pino";
+import {FaceItClient} from "../lib/faceItClient";
+import {createMockHttpsRequest, mockHttpsByUrl} from "../lib/testSupport/mockHttps";
 
 jest.mock('https', () => ({
-    get: jest.fn().mockReturnValue(
-        {
-            setTimeout: fn,
-            destroy: fn,
-            on: fn,
-        }
-    ),
+    get: jest.fn(),
 }))
-
-// Mirrors the slice of https.ClientRequest the production code relies on: it
-// is an EventEmitter (for 'error'/'timeout') augmented with setTimeout and
-// destroy. destroy(err) re-emits 'error' with that error, exactly like Node's
-// real ClientRequest, so the single request.on('error', reject) funnel in the
-// source turns an idle timeout into a rejection.
-const createMockHttpsRequest = () => {
-    const request = new EventEmitter() as any
-    request.setTimeout = fn()
-    request.destroy = fn((error?: Error) => {
-        if (error) {
-            request.emit('error', error)
-        }
-    })
-    return request
-}
-
-// After consolidating every FaceIt call onto https.get, a single test may see
-// several https.get invocations to different hosts (public match endpoint then
-// the authenticated fallback). This routes each call to a canned response
-// keyed by a substring of the URL, so tests stay declarative instead of
-// hand-rolling call-count branching inside the mock.
-type CannedHttpsResponse = {
-    statusCode: number
-    body: unknown
-    timeout?: boolean
-}
-const mockHttpsByUrl = (routes: Array<{ match: string } & CannedHttpsResponse>) =>
-    jest.mocked(https.get).mockImplementation(((url: string, _options: any, callback: any) => {
-        const route = routes.find((candidate) => url.includes(candidate.match))
-        if (!route) {
-            throw new Error(`mockHttpsByUrl: no canned response for ${url}`)
-        }
-        const request = createMockHttpsRequest()
-        if (route.timeout) {
-            setImmediate(() => request.emit('timeout'))
-            return request
-        }
-        const response = new EventEmitter() as any
-        response.statusCode = route.statusCode
-        callback(response)
-        response.emit('data', typeof route.body === 'string' ? route.body : JSON.stringify(route.body))
-        response.emit('end')
-        return request
-    }) as any)
 
 describe('MichelBackService', () => {
     let michelBackService: MichelBackService
@@ -149,6 +100,7 @@ describe('MichelBackService', () => {
             const httpsGetMock = jest.mocked(https.get).mockImplementation(((url, options, callback) => {
                 const response = new EventEmitter() as any
                 response.statusCode = 200
+                response.setEncoding = fn()
                 callback(response)
                 response.emit('data', JSON.stringify(faceItMatchPayload))
                 response.emit('end')
@@ -429,7 +381,10 @@ describe('MichelBackService', () => {
             jest.restoreAllMocks()
             ;(global.fetch as any).mockRestore?.()
             jest.mocked(https.get).mockReset()
-            michelBackService = new MichelBackService(connectionPool, false)
+            // mockedLogger is shared across the suite; clear accumulated calls so
+            // "was not called with" assertions in this block can't see prior tests.
+            Object.values(mockedLogger as unknown as Record<string, Mock>).forEach((level) => level.mockClear?.())
+            michelBackService = new MichelBackService(connectionPool, false, undefined, mockedLogger)
         })
 
         it('should not try and fetch anything if no matchId is provided', async () => {
@@ -568,6 +523,7 @@ describe('MichelBackService', () => {
                 const request = createMockHttpsRequest()
                 const emitResponse = (body: unknown) => {
                     const response = new EventEmitter() as any
+                    response.setEncoding = fn()
                     response.statusCode = 200
                     callback(response)
                     response.emit('data', JSON.stringify(body))
@@ -611,6 +567,88 @@ describe('MichelBackService', () => {
                     },
                 },
             })
+        })
+        it('should log an error and call `next` if any error got thrown during the retrieval process', async () => {
+            // setup
+            const nextMock = fn()
+            jest.spyOn((michelBackService as any).faceItClient, 'getLobbyHistory').mockResolvedValue({})
+            jest.spyOn((michelBackService as any).faceItClient, 'hasBanVotesForMap').mockImplementation(() => {
+                throw new Error('Foo Bar Baz Error')
+            })
+            // action
+            await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
+
+            // assert
+            expect(nextMock).toHaveBeenCalledTimes(1)
+            expect(mockedLogger.error).toHaveBeenCalledWith({
+                msg: 'Error fetching faceit match details (bans)',
+                error: 'Foo Bar Baz Error'
+            })
+        })
+
+        it('should keep series data that are not bans and just replace bans when called (in the event FaceIt data has already been initialized before)', async () => {
+            // setup
+            const nextMock = fn()
+            const seriesData = michelBackService.getSeriesData()
+            seriesData.faceIt = {
+                matchId: '',
+                raw: {
+                    voting: {
+                        heroes: {
+                            entities: [{}]
+                        }
+                    }
+                }
+            }
+            seriesData.standings[`match1`] = {
+                bans: {
+                    team1: {
+                        heroImage: 'dva.jpeg',
+                        heroName: 'DVa',
+                    },
+                    team2: {
+                        heroImage: 'soldier.jpeg',
+                        heroName: 'Soldier 76',
+                    }
+                },
+                map: {
+                    selectedBy: 'team1',
+                    image: 'suravasa.jpeg',
+                    name: 'Suravasa'
+                }
+            }
+            jest.spyOn((michelBackService as any).faceItClient, 'getLobbyHistory').mockResolvedValue({})
+            jest.spyOn((michelBackService as any).faceItClient, 'hasBanVotesForMap').mockReturnValue(true)
+            jest.spyOn((michelBackService as any).faceItClient, 'extractBansForMap').mockReturnValue(
+                {
+                    team1: {heroImage: 'emre.jpeg', heroName: 'Emre'},
+                    team2: {heroImage: 'domina.jpeg', heroName: 'Domina'}
+                }
+            )
+
+            // action
+            await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
+
+            // assert
+            expect(seriesData.standings[`match1`]).toStrictEqual(
+                {
+                    bans: {
+                        team1: {
+                            heroImage: 'emre.jpeg',
+                            heroName: 'Emre',
+                        },
+                        team2: {
+                            heroImage: 'domina.jpeg',
+                            heroName: 'Domina',
+                        }
+                    },
+                    map: {
+                        selectedBy: 'team1',
+                        image: 'suravasa.jpeg',
+                        name: 'Suravasa'
+                    }
+                }
+            )
         })
     })
     describe('teamUpdateBan', () => {
@@ -1132,83 +1170,22 @@ describe('MichelBackService', () => {
 
         const MATCH_ID = '1-9f898257-b66c-4a72-9295-1b6aef2cb672'
 
-        it('should extract the match id if a FaceIt room url was given, instead of a match ID', () => {
+        // Per-URL extraction is exhaustively unit-tested on FaceItClient.extractMatchId.
+        // Here we only guard the WIRING: the service must hand the extracted id to the
+        // FaceIt client rather than the raw room URL it received.
+        it('should extract the match id from a room url and pass it to the FaceIt client', async () => {
             // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
+            const faceItClient = {
+                getNormalizedMatchData: fn(async () => ({raw: {}, team1: {}, team2: {}})),
+                getLobbyHistory: fn(),
+                extractBansForMap: fn(),
+                hasBanVotesForMap: fn(),
+            } as unknown as FaceItClient
+            const svc = new MichelBackService([], false, undefined, mockedLogger, faceItClient)
             // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}`)
+            await svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/scoreboard?foo=bar`)
             // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should be able to use a bare match id if provided', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url with a trailing slash', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url with a scoreboard suffix', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/scoreboard`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url carrying a query string', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}?foo=bar`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
-        })
-        it('should extract the match id from a url carrying a hash fragment', () => {
-            // setup
-            const svc = new MichelBackService([], false)
-            const jsonGetSpy = spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {
-                    teams: {faction1: {}, faction2: {}}
-                }
-            })
-            // action
-            svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}#scoreboard`)
-            // assert
-            expect(jsonGetSpy).toHaveBeenCalledWith(`https://www.faceit.com/api/match/v2/match/${MATCH_ID}`)
+            expect(faceItClient.getNormalizedMatchData).toHaveBeenCalledWith(MATCH_ID)
         })
 
         const seriesDataWithStaleStandings = (): SeriesData => ({
@@ -1220,11 +1197,11 @@ describe('MichelBackService', () => {
 
         it('should wipe stale standings from a previous match once the new match data resolves', async () => {
             // setup
-            const svc = new MichelBackService([], false, seriesDataWithStaleStandings())
+            const faceItClient = {
+                getNormalizedMatchData: fn(async () => ({raw: {}, team1: {name: 'A'}, team2: {name: 'B'}})),
+            } as unknown as FaceItClient
+            const svc = new MichelBackService([], false, seriesDataWithStaleStandings(), mockedLogger, faceItClient)
             jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            spyOn(svc as any, 'getJsonUsingNodeHttps').mockResolvedValue({
-                payload: {teams: {faction1: {name: 'A'}, faction2: {name: 'B'}}}
             })
             // action
             await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
@@ -1234,12 +1211,13 @@ describe('MichelBackService', () => {
 
         it('should wipe stale standings even when the new match fetch fails', async () => {
             // setup
-            const svc = new MichelBackService([], false, seriesDataWithStaleStandings())
+            const faceItClient = {
+                getNormalizedMatchData: fn(async () => {
+                    throw new Error('fetch failed')
+                }),
+            } as unknown as FaceItClient
+            const svc = new MichelBackService([], false, seriesDataWithStaleStandings(), mockedLogger, faceItClient)
             jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            jest.spyOn(global, 'fetch').mockResolvedValue({status: 418, json: () => Promise.resolve({})} as Response)
-            spyOn(svc as any, 'getJsonUsingNodeHttps').mockRejectedValue({
-                status: 418,
             })
             // action
             await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
