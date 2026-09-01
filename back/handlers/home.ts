@@ -226,7 +226,7 @@ export class MichelBackService {
                 this.setMapCount(payload.value);
                 break;
             case 'catchup':
-                this.catchup(payload.value);
+                await this.catchup(payload.value);
                 break;
             case 'countdownSet':
                 // Update the displayed value without running the timer
@@ -270,11 +270,6 @@ export class MichelBackService {
         }
     }
 
-    /** @deprecated Use broadcastState() instead */
-    sendUpdatedStateToCaller() {
-        this.broadcastState()
-    }
-
     swapTeams = (): SeriesData => {
         const rightTeam = this.seriesData.display.right
         const leftTeam = this.seriesData.display.left
@@ -283,7 +278,7 @@ export class MichelBackService {
         if (this.debug) {
             this.logger.info('swapTeams')
         }
-        this.broadcastState()
+        // this.broadcastState()
         return this.seriesData
     }
 
@@ -670,19 +665,19 @@ export class MichelBackService {
     setMapCount = (rawValue: any) => {
         const parsed = typeof rawValue === 'number' ? rawValue : Number(rawValue)
         if (!Number.isFinite(parsed)) {
-            this.broadcastState()
+            // this.broadcastState()
             return
         }
         const sanitized = Math.max(1, Math.floor(parsed))
         if (sanitized === this.seriesData.display.mapCount) {
-            this.broadcastState()
+            // this.broadcastState()
             return
         }
         this.seriesData.display.mapCount = sanitized
         if (this.debug) {
             this.logger.info({msg: 'setMapCount', mapCount: sanitized})
         }
-        this.broadcastState()
+        // this.broadcastState()
     }
 
     /**
@@ -727,7 +722,7 @@ export class MichelBackService {
      * broadcast still goes out so the front-end can settle on the current
      * server state.
      */
-    catchup = (intent: any) => {
+    catchup = async (intent: any) => {
         const applied: string[] = []
         const skipped: string[] = []
         let matchIdTriggeredFetch = false
@@ -740,7 +735,7 @@ export class MichelBackService {
                         // Defer broadcast: initialMatchDataFromFaceItMatchId
                         // broadcasts on completion.
                         this.seriesData.faceIt.matchId = intent.faceItMatchId
-                        this.initialMatchDataFromFaceItMatchId(intent.faceItMatchId)
+                        await this.initialMatchDataFromFaceItMatchId(intent.faceItMatchId)
                         matchIdTriggeredFetch = true
                     } else {
                         this.seriesData.faceIt.matchId = ''
@@ -818,7 +813,7 @@ export class MichelBackService {
 
         this.logger.info({msg: 'catchup', applied, skipped})
 
-        this.broadcastState()
+        // this.broadcastState()
         // initialMatchDataFromFaceItMatchId triggers its own async broadcast
         // once the FaceIt fetch settles. If we also broadcast synchronously
         // here, the front would see the partially-updated state first and
