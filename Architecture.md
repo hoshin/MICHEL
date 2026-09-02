@@ -125,7 +125,7 @@ All HTTP routes are defined in `back/index.ts`. Each handler delegates to a `Mic
 Two outbound HTTP integrations from the back (both to FaceIt):
 
 - `https://open.faceit.com/data/v4/matches/{matchId}` — fired by the WS command `updateFromMatchId` (`back/handlers/home.ts`).
-- `https://www.faceit.com/api/democracy/v1/match/{matchId}/history` — fired by the WS command `fetchFaceItMatchUpdates` (`back/handlers/home.ts`).
+- `https://www.faceit.com/api/democracy/v1/match/{matchId}/history` — fired by the WS command `fetchFaceItMatchUpdatesAndUpdateLobbyData` (`back/handlers/home.ts`).
 
 The only HTTP client in the repo (other than the back's FaceIt calls) is the Stream Deck plugin. The front has none.
 
@@ -135,7 +135,7 @@ The back's WebSocket server (`back/index.ts`) speaks a JSON-over-text protocol.
 
 **Incoming envelope (client → back).** Every message is `JSON.parse`d (`back/handlers/home.ts`) and dispatched on `payload.command` (`back/handlers/home.ts`). Known commands:
 
-`increaseTeam1Score`, `decreaseTeam1Score`, `increaseTeam2Score`, `decreaseTeam2Score`, `updateTeam1Name`, `updateTeam2Name`, `swapTeams`, `increaseMapCount`, `decreaseMapCount`, `updateMapFormat`, `updateTeam1Logo`, `updateTeam2Logo`, `updateTournamentLogo`, `toggleOptionalLogoDisplay`, `updateFromMatchId`, `fetchFaceItMatchUpdates`, `increaseCustomCounter`, `decreaseCustomCounter`, `team1UpdateBan`, `team2UpdateBan`, `setMapCount`, `catchup`, `countdownSet`, `countdownStart`, `countdownPause`, `countdownResume`, `countdownReset`, `countdownSetColor`.
+`increaseTeam1Score`, `decreaseTeam1Score`, `increaseTeam2Score`, `decreaseTeam2Score`, `updateTeam1Name`, `updateTeam2Name`, `swapTeams`, `increaseMapCount`, `decreaseMapCount`, `updateMapFormat`, `updateTeam1Logo`, `updateTeam2Logo`, `updateTournamentLogo`, `toggleOptionalLogoDisplay`, `updateFromMatchId`, `fetchFaceItMatchUpdatesAndUpdateLobbyData`, `increaseCustomCounter`, `decreaseCustomCounter`, `team1UpdateBan`, `team2UpdateBan`, `setMapCount`, `catchup`, `countdownSet`, `countdownStart`, `countdownPause`, `countdownResume`, `countdownReset`, `countdownSetColor`.
 
 Anything else falls through to `michelBackService.home(null)` (`back/handlers/home.ts`), which simply rebroadcasts the current state. The front exploits this on connect by sending `{ init: 1 }` to receive an initial snapshot (`front/client-app/src/teamsDataSocket.ts`).
 

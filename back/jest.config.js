@@ -20,4 +20,6 @@ export default {
   coverageDirectory: './coverage',
   reporters: ['default'],
   ...presetConfig,
+  restoreMocks: true,
+  resetMocks: true,
 };

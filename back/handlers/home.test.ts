@@ -25,22 +25,31 @@ describe('MichelBackService', () => {
         trace: fn(),
         warn: fn(),
     } as unknown as Logger
+    beforeEach(() => {
+        ;(global.fetch as any).mockRestore?.()
+        process.env.FACEIT_KEY = ''
+        process.env.CONFIGFILE_PATH = 'bogus/path' // fake path to force using an inexploitable config file
+        michelBackService = new MichelBackService([], false, structuredClone(DEFAULT_SERIES_DATA), mockedLogger)
+    })
+    afterAll(() => {
+        process.env.FACEIT_KEY = originalFaceItKey
+        process.env.CONFIGFILE_PATH = originalConfigFilePath
+    })
+    describe('handleCommand', () => {
+        it('should broadcast the updated state to all WebSocket clients after executing a command', () => {
+            // setup
+            const sendStub: Mock<any, any, any> = fn()
+            const connectionPool = [{send: sendStub}, {send: sendStub}]
+            const michelBackService = new MichelBackService(connectionPool, false)
+            const payloadBuffer: Buffer = Buffer.from('{ "command": "swapTeams" }', 'utf8')
+            // action
+            michelBackService.handleCommand(payloadBuffer)
+
+            // assert
+            expect(sendStub).toHaveBeenCalledTimes(2)
+        })
+    })
     describe('initialMatchDataFromFaceItMatchId', () => {
-        beforeEach(() => {
-            const connectionPool = []
-            jest.restoreAllMocks()
-            ;(global.fetch as any).mockRestore?.()
-            jest.mocked(https.get).mockReset()
-            process.env.FACEIT_KEY = ''
-            process.env.CONFIGFILE_PATH = 'bogus/path' // fake path to force using an inexploitable config file
-            michelBackService = new MichelBackService(connectionPool, false, undefined, mockedLogger)
-        })
-
-        afterAll(() => {
-            process.env.FACEIT_KEY = originalFaceItKey
-            process.env.CONFIGFILE_PATH = originalConfigFilePath
-        })
-
         it('should ignore non-string payloads without throwing or hitting the network', async () => {
             // setup
             const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
@@ -55,7 +64,6 @@ describe('MichelBackService', () => {
             // action
             for (const malformedPayload of malformedPayloads) {
                 await michelBackService.initialMatchDataFromFaceItMatchId(
-                    res,
                     malformedPayload,
                 )
             }
@@ -67,7 +75,6 @@ describe('MichelBackService', () => {
         });
         it('should get team names and logos from the public FaceIt match endpoint', async () => {
             // setup
-            const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
             const faceItMatchPayload = {
                 payload: {
                     teams: {
@@ -109,7 +116,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            const actual = await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(httpsGetMock).toHaveBeenCalledWith('https://www.faceit.com/api/match/v2/match/match-id', {
@@ -135,13 +142,79 @@ describe('MichelBackService', () => {
                 },
             ])
             expect(fetchMock).not.toHaveBeenCalled()
-            expect(res.json).toHaveBeenCalledWith(michelBackService.getSeriesData())
+            expect(actual).toEqual(
+                {
+                    "display": {
+                        "countdown": 0,
+                        "countdownColor": "",
+                        "countdownRunning": false,
+                        "customCounter": 0,
+                        "left": "team2",
+                        "mapCount": 1,
+                        "mapFormat": "FT3",
+                        "optionalLogoDisplay": true,
+                        "right": "team1",
+                        "tournamentLogo": ""
+                    },
+                    "faceIt": {
+                        "matchId": "match-id",
+                        "raw": {
+                            "matchCustom": {
+                                "tree": {
+                                    "heroes": {
+                                        "values": {
+                                            "value": [
+                                                {
+                                                    "guid": "0x02E000000000007A",
+                                                    "image_lg": "https://assets.faceit-cdn.net/dva.jpeg",
+                                                    "name": "DVa"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "teams": {
+                                "faction1": {
+                                    "avatar": "https://distribution.faceit-cdn.net/moominhouse.jpg",
+                                    "name": "Moominhouse"
+                                },
+                                "faction2": {
+                                    "avatar": "https://distribution.faceit-cdn.net/elmt-thunder.jpg",
+                                    "name": "ELMT Thunder"
+                                }
+                            },
+                            "voting": {
+                                "heroes": {
+                                    "entities": [
+                                        {
+                                            "guid": "0x02E000000000007A",
+                                            "image_lg": "https://assets.faceit-cdn.net/dva.jpeg",
+                                            "name": "DVa"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "standings": {},
+                    "team1": {
+                        "logo": "https://distribution.faceit-cdn.net/moominhouse.jpg",
+                        "name": "Moominhouse",
+                        "score": 0
+                    },
+                    "team2": {
+                        "logo": "https://distribution.faceit-cdn.net/elmt-thunder.jpg",
+                        "name": "ELMT Thunder",
+                        "score": 0
+                    }
+                }
+            )
         })
 
         it('should fallback to the authenticated FaceIt endpoint when the public endpoint fails and an API key is available', async () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
-            const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
             const httpsGetMock = mockHttpsByUrl([
                 {match: 'www.faceit.com/api/match/v2', statusCode: 418, body: {}},
                 {
@@ -175,7 +248,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            const actual = await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(httpsGetMock).toHaveBeenCalledWith('https://www.faceit.com/api/match/v2/match/match-id', {
@@ -207,13 +280,62 @@ describe('MichelBackService', () => {
                     image_lg: 'https://assets.faceit-cdn.net/ana.jpeg',
                 },
             ])
-            expect(res.json).toHaveBeenCalledWith(michelBackService.getSeriesData())
+            expect(actual).toEqual({
+                "display": {
+                    "countdown": 0,
+                    "countdownColor": "",
+                    "countdownRunning": false,
+                    "customCounter": 0,
+                    "left": "team2",
+                    "mapCount": 1,
+                    "mapFormat": "FT3",
+                    "optionalLogoDisplay": true,
+                    "right": "team1",
+                    "tournamentLogo": ""
+                },
+                "faceIt": {
+                    "matchId": "match-id",
+                    "raw": {
+                        "teams": {
+                            "faction1": {
+                                "avatar": "https://distribution.faceit-cdn.net/auth-alpha.jpg",
+                                "name": "Authenticated Alpha"
+                            },
+                            "faction2": {
+                                "avatar": "https://distribution.faceit-cdn.net/auth-bravo.jpg",
+                                "name": "Authenticated Bravo"
+                            }
+                        },
+                        "voting": {
+                            "heroes": {
+                                "entities": [
+                                    {
+                                        "guid": "hero-guid",
+                                        "image_lg": "https://assets.faceit-cdn.net/ana.jpeg",
+                                        "name": "Ana"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "standings": {},
+                "team1": {
+                    "logo": "https://distribution.faceit-cdn.net/auth-alpha.jpg",
+                    "name": "Authenticated Alpha",
+                    "score": 0
+                },
+                "team2": {
+                    "logo": "https://distribution.faceit-cdn.net/auth-bravo.jpg",
+                    "name": "Authenticated Bravo",
+                    "score": 0
+                }
+            })
         })
 
         it('should fallback to the authenticated FaceIt endpoint when the public payload does not contain both teams', async () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
-            const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
             mockHttpsByUrl([
                 {
                     match: 'www.faceit.com/api/match/v2',
@@ -234,7 +356,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(fetchMock).not.toHaveBeenCalled()
@@ -262,7 +384,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(fetchMock).not.toHaveBeenCalled()
@@ -281,7 +403,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(httpsGetMock).toHaveBeenCalledTimes(2)
@@ -306,7 +428,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(capturedRequest.setTimeout).toHaveBeenCalledWith(15000)
@@ -330,7 +452,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(httpsGetMock).toHaveBeenCalledTimes(2)
@@ -342,7 +464,6 @@ describe('MichelBackService', () => {
         it('should fall back to the authenticated endpoint when the public request times out and a key is available', async () => {
             // setup
             process.env.FACEIT_KEY = 'faceit-api-key'
-            const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
             const httpsGetMock = mockHttpsByUrl([
                 {match: 'www.faceit.com/api/match/v2', statusCode: 200, body: {}, timeout: true},
                 {
@@ -359,7 +480,7 @@ describe('MichelBackService', () => {
             const fetchMock = spyOn(global, 'fetch')
 
             // action
-            await michelBackService.initialMatchDataFromFaceItMatchId(res, 'match-id')
+            await michelBackService.initialMatchDataFromFaceItMatchId('match-id')
 
             // assert
             expect(httpsGetMock).toHaveBeenCalledTimes(2)
@@ -374,17 +495,12 @@ describe('MichelBackService', () => {
             })
         })
     })
-
     describe('updatedLobbyDataFromFaceItMatchId', () => {
         beforeEach(() => {
-            const connectionPool = []
-            jest.restoreAllMocks()
             ;(global.fetch as any).mockRestore?.()
-            jest.mocked(https.get).mockReset()
             // mockedLogger is shared across the suite; clear accumulated calls so
             // "was not called with" assertions in this block can't see prior tests.
             Object.values(mockedLogger as unknown as Record<string, Mock>).forEach((level) => level.mockClear?.())
-            michelBackService = new MichelBackService(connectionPool, false, undefined, mockedLogger)
         })
 
         it('should not try and fetch anything if no matchId is provided', async () => {
@@ -446,7 +562,7 @@ describe('MichelBackService', () => {
         it('should still call next when the fetched payload contains no tickets (hence no hero ban votes) AND should NOT throw a ban retrieval error', async () => {
             // setup
             const nextMock = fn()
-            mockHttpsByUrl([
+            const getMock = mockHttpsByUrl([
                 {
                     match: 'www.faceit.com/api/democracy/v1',
                     statusCode: 200,
@@ -458,6 +574,12 @@ describe('MichelBackService', () => {
             // action
             await michelBackService.updatedLobbyDataFromFaceItMatchId('match-id', 1, nextMock)
             // assert
+            expect(getMock).toHaveBeenCalledWith('https://www.faceit.com/api/democracy/v1/match/match-id/history', {
+                "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36",
+                }}, expect.any(Function)
+            )
             expect(nextMock).toHaveBeenCalled()
             expect(mockedLogger.error).not.toHaveBeenCalledWith(expect.objectContaining({
                 msg: 'Error fetching faceit match details (bans)'
@@ -652,9 +774,12 @@ describe('MichelBackService', () => {
         })
     })
     describe('teamUpdateBan', () => {
-        it('should update Team1 ban for round 2 if current round is 2 and selected team is team 1', () => {
+        let michelBackService: MichelBackService
+        beforeEach(() => {
+            michelBackService = new MichelBackService([], false)
+        })
+        it('should update Team1 ban for round 2 if current round is 2 and selected team is team 1', async () => {
             // setup
-            const michelBackService = new MichelBackService([], false)
             const expectedUpdatedStandings = {
                 "match2": {
                     "bans": {
@@ -666,16 +791,16 @@ describe('MichelBackService', () => {
                 },
 
             }
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(null, 1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // action
-            michelBackService.teamUpdateBan(null, 'team1', 'Foo')
+            michelBackService.teamUpdateBan('team1', 'Foo')
             // assert
             expect(michelBackService.getSeriesData().standings).toEqual(expectedUpdatedStandings)
         })
 
-        it('should update Team2 ban for round 2 if current round is 2 and selected team is team 2', () => {
+        it('should update Team2 ban for round 2 if current round is 2 and selected team is team 2', async () => {
             // setup
-            const michelBackService = new MichelBackService([], false)
+            // const michelBackService = new MichelBackService([], false)
             const expectedUpdatedStandings = {
                 "match2": {
                     "bans": {
@@ -686,74 +811,28 @@ describe('MichelBackService', () => {
                     },
                 },
             }
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(null, 1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // action
-            michelBackService.teamUpdateBan(null, 'team2', 'Bar')
+            michelBackService.teamUpdateBan('team2', 'Bar')
             // assert
             expect(michelBackService.getSeriesData().standings).toEqual(expectedUpdatedStandings)
         })
     })
     describe('teamIncrementScore', () => {
         it('should increment team1 score by 2 if `team1` is selected increment is 2', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.teamIncrementScore(null, 'team1', 2)
+            // setup / action
+            michelBackService.teamIncrementScore('team1', 2)
             // assert
             expect(michelBackService.getSeriesData().team1.score).toStrictEqual(2)
         })
         it('should not allow a team score to be negative', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.teamIncrementScore(null, 'team1', -2)
+            // setup / action
+            michelBackService.teamIncrementScore('team1', -2)
             // assert
             expect(michelBackService.getSeriesData().team1.score).toStrictEqual(0)
         })
     })
-    describe('sendUpdatedStateToCaller', () => {
-        it('should return the current seriesData to the caller if a Response object was provided (regular REST call)', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-            const res: ExpressResponse = {
-                json: fn()
-            } as unknown as ExpressResponse
-            // action
-            michelBackService.sendUpdatedStateToCaller(res)
-            // assert
-            expect(res.json).toHaveBeenCalledWith(
-                {
-                    "display": {
-                        "countdown": 0,
-                        "countdownColor": "",
-                        "countdownRunning": false,
-                        "customCounter": 0,
-                        "left": "team2",
-                        "mapCount": 1,
-                        "mapFormat": "FT3",
-                        "optionalLogoDisplay": true,
-                        "right": "team1",
-                        "tournamentLogo": "",
-                    },
-                    "faceIt": {
-                        "matchId": "",
-                    },
-                    "standings": {},
-                    "team1": {
-                        "logo": "",
-                        "name": "",
-                        "score": 0,
-                    },
-                    "team2": {
-                        "logo": "",
-                        "name": "",
-                        "score": 0,
-                    },
-                }
-            )
-        })
+    describe('broadcastState', () => {
         it('should send a message through the connection pool with the current seriesData to all connected clients (WebSocket)', () => {
             // setup
             const sendStub = fn()
@@ -762,100 +841,53 @@ describe('MichelBackService', () => {
                 {send: sendStub}
             ]
             const michelBackService = new MichelBackService(connectionPool, false)
-            const expectedResponse = JSON.stringify({
-                "display": {
-                    "countdown": 0,
-                    "countdownColor": "",
-                    "countdownRunning": false,
-                    "customCounter": 0,
-                    "left": "team2",
-                    "mapCount": 1,
-                    "mapFormat": "FT3",
-                    "optionalLogoDisplay": true,
-                    "right": "team1",
-                    "tournamentLogo": "",
-                },
-                "faceIt": {
-                    "matchId": "",
-                },
-                "standings": {},
-                "team1": {
-                    "logo": "",
-                    "name": "",
-                    "score": 0,
-                },
-                "team2": {
-                    "logo": "",
-                    "name": "",
-                    "score": 0,
-                },
-            })
             // action
-            michelBackService.sendUpdatedStateToCaller(null)
+            michelBackService.broadcastState()
             // assert
             expect(sendStub).toHaveBeenCalledTimes(2)
         })
     })
     describe('teamUpdateName', () => {
         it('should correctly update team1 name if provided name is `team1`', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.teamUpdateName(null, 'team1', 'new team name')
+            // setup / action
+            michelBackService.teamUpdateName('team1', 'new team name')
             // assert
             expect(michelBackService.getSeriesData().team1.name).toStrictEqual('new team name')
             expect(michelBackService.getSeriesData().team2.name).toStrictEqual('')
         })
         it('should correctly update team2 name if provided name is `team2`', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.teamUpdateName(null, 'team2', 'new team name')
+            // setup / action
+            michelBackService.teamUpdateName('team2', 'new team name')
             // assert
             expect(michelBackService.getSeriesData().team1.name).toStrictEqual('')
             expect(michelBackService.getSeriesData().team2.name).toStrictEqual('new team name')
         })
         it('should NOT update any team name if provided name is neither `team1` nor `team2`', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.teamUpdateName(null, 'foo', 'new team name')
+            // setup / action
+            michelBackService.teamUpdateName('foo', 'new team name')
             // assert
             expect(michelBackService.getSeriesData().team1.name).toStrictEqual('')
             expect(michelBackService.getSeriesData().team2.name).toStrictEqual('')
         })
     })
-
     describe('updateTeamLogo', () => {
         it('should correctly update team1 name if provided name is `team1`', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.updateTeamLogo(null, 'team1', 'new team logo')
+            // setup / action
+            michelBackService.updateTeamLogo('team1', 'new team logo')
             // assert
             expect(michelBackService.getSeriesData().team1.logo).toStrictEqual('new team logo')
             expect(michelBackService.getSeriesData().team2.logo).toStrictEqual('')
         })
         it('should correctly update team2 name if provided name is `team2`', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.updateTeamLogo(null, 'team2', 'new team logo')
+            // setup / action
+            michelBackService.updateTeamLogo('team2', 'new team logo')
             // assert
             expect(michelBackService.getSeriesData().team1.logo).toStrictEqual('')
             expect(michelBackService.getSeriesData().team2.logo).toStrictEqual('new team logo')
         })
         it('should NOT update any team name if provided name is neither `team1` nor `team2`', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-
-            // action
-            michelBackService.updateTeamLogo(null, 'foo', 'new team logo')
+            // setup / action
+            michelBackService.updateTeamLogo('foo', 'new team logo')
             // assert
             expect(michelBackService.getSeriesData().team1.logo).toStrictEqual('')
             expect(michelBackService.getSeriesData().team2.logo).toStrictEqual('')
@@ -865,12 +897,10 @@ describe('MichelBackService', () => {
         it('should swap right and left display values', () => {
             // setup
             const michelBackService = new MichelBackService([], false)
-            // Default: right = 'team1', left = 'team2'
-
             // action
-            michelBackService.swapTeams(null)
-
+            michelBackService.swapTeams()
             // assert
+            // Default: right = 'team1', left = 'team2' so should be flipped after calling `swapTeams`
             expect(michelBackService.getSeriesData().display.right).toStrictEqual('team2')
             expect(michelBackService.getSeriesData().display.left).toStrictEqual('team1')
         })
@@ -880,79 +910,41 @@ describe('MichelBackService', () => {
             const michelBackService = new MichelBackService([], false)
 
             // action
-            michelBackService.swapTeams(null)
-            michelBackService.swapTeams(null)
+            michelBackService.swapTeams()
+            michelBackService.swapTeams()
 
             // assert
             expect(michelBackService.getSeriesData().display.right).toStrictEqual('team1')
             expect(michelBackService.getSeriesData().display.left).toStrictEqual('team2')
         })
-
-        it('should call sendUpdatedStateToCaller with the provided response', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-            const sendUpdatedStateStub = spyOn(michelBackService, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            const res: ExpressResponse = {json: fn()} as unknown as ExpressResponse
-
-            // action
-            michelBackService.swapTeams(res)
-
-            // assert
-            expect(sendUpdatedStateStub).toHaveBeenCalledWith(res)
-        })
-
-        it('should broadcast the updated state to all WebSocket clients after swapping', () => {
-            // setup
-            const sendStub: Mock<any, any, any> = fn()
-            const connectionPool = [{send: sendStub}, {send: sendStub}]
-            const michelBackService = new MichelBackService(connectionPool, false)
-
-            // action
-            michelBackService.swapTeams(null)
-
-            // assert
-            expect(sendStub).toHaveBeenCalledTimes(2)
-            const sentPayload = JSON.parse(sendStub.mock.calls[0][0])
-            expect(sentPayload.display.right).toStrictEqual('team2')
-            expect(sentPayload.display.left).toStrictEqual('team1')
-        })
     })
-
     describe('setMapCount', () => {
         it('should set mapCount to the provided value', () => {
-            const svc = new MichelBackService([], false)
-            svc.setMapCount(null, 4)
-            expect(svc.getSeriesData().display.mapCount).toStrictEqual(4)
+            michelBackService.setMapCount(4)
+            expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(4)
         })
 
         it('should coerce a numeric string to a number', () => {
-            const svc = new MichelBackService([], false)
-            svc.setMapCount(null, '3')
-            expect(svc.getSeriesData().display.mapCount).toStrictEqual(3)
+            michelBackService.setMapCount('3')
+            expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(3)
         })
 
         it('should clamp to a minimum of 1 for zero / negative input', () => {
-            const svc = new MichelBackService([], false)
-            svc.setMapCount(null, -7)
-            expect(svc.getSeriesData().display.mapCount).toStrictEqual(1)
-            svc.setMapCount(null, 0)
-            expect(svc.getSeriesData().display.mapCount).toStrictEqual(1)
+            michelBackService.setMapCount(-7)
+            expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(1)
+            michelBackService.setMapCount(0)
+            expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(1)
         })
 
         it('should floor non-integer values', () => {
-            const svc = new MichelBackService([], false)
-            svc.setMapCount(null, 3.9)
-            expect(svc.getSeriesData().display.mapCount).toStrictEqual(3)
+            michelBackService.setMapCount(3.9)
+            expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(3)
         })
 
         it('should leave mapCount untouched and still broadcast when the value is unparseable', () => {
-            const svc = new MichelBackService([], false)
-            const broadcastSpy = spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            svc.setMapCount(null, 'not-a-number')
-            expect(svc.getSeriesData().display.mapCount).toStrictEqual(1)
-            expect(broadcastSpy).toHaveBeenCalledTimes(1)
+            const michelBackService = new MichelBackService([], false)
+            michelBackService.setMapCount('not-a-number')
+            expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(1)
         })
 
         it('should NOT trigger any FaceIt fetch even when standings are missing for the target map', () => {
@@ -960,30 +952,25 @@ describe('MichelBackService', () => {
                 ...structuredClone(DEFAULT_SERIES_DATA),
                 faceIt: {matchId: 'some-id'},
             })
-            const fetchSpy = spyOn(svc, 'fetchFaceItMatchUpdates').mockImplementation(() => {
-            })
-            svc.setMapCount(null, 5)
+            const fetchSpy = spyOn(svc, 'fetchFaceItMatchUpdatesAndUpdateLobbyData').mockImplementation(() => Promise.resolve())
+            svc.setMapCount(5)
             expect(fetchSpy).not.toHaveBeenCalled()
         })
     })
-
     describe('catchup', () => {
-        it('should be a no-op (just broadcast) when given a non-object payload', () => {
-            const svc = new MichelBackService([], false)
-            const broadcastSpy = spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
+        it('should be a no-op when given a non-object payload', () => {
+            const broadcastSpy = spyOn(michelBackService, 'broadcastState').mockImplementation(() => {
             })
-            svc.catchup(null, null)
-            svc.catchup(null, 'string')
-            svc.catchup(null, [1, 2])
-            expect(broadcastSpy).toHaveBeenCalledTimes(3)
-            expect(svc.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
+            michelBackService.catchup(null)
+            michelBackService.catchup('string')
+            michelBackService.catchup([1, 2])
+            expect(michelBackService.getSeriesData()).toEqual(DEFAULT_SERIES_DATA)
         })
 
         it('should apply tournamentLogo and mapCount when they differ from current state', () => {
-            const svc = new MichelBackService([], false)
-            svc.catchup(null, {tournamentLogo: 'https://logo', mapCount: 4})
-            expect(svc.getSeriesData().display.tournamentLogo).toStrictEqual('https://logo')
-            expect(svc.getSeriesData().display.mapCount).toStrictEqual(4)
+            michelBackService.catchup({tournamentLogo: 'https://logo', mapCount: 4})
+            expect(michelBackService.getSeriesData().display.tournamentLogo).toStrictEqual('https://logo')
+            expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(4)
         })
 
         it('should NOT trigger a FaceIt fetch when faceItMatchId is unchanged', () => {
@@ -992,16 +979,15 @@ describe('MichelBackService', () => {
                 faceIt: {matchId: 'same-id'},
             })
             const fetchSpy = spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            svc.catchup(null, {faceItMatchId: 'same-id'})
+            svc.catchup({faceItMatchId: 'same-id'})
             expect(fetchSpy).not.toHaveBeenCalled()
         })
 
         it('should trigger a FaceIt fetch when faceItMatchId changes to a non-empty value', () => {
-            const svc = new MichelBackService([], false)
-            const fetchSpy = spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            svc.catchup(null, {faceItMatchId: 'new-match-id'})
-            expect(fetchSpy).toHaveBeenCalledWith(null, 'new-match-id')
-            expect(svc.getSeriesData().faceIt.matchId).toStrictEqual('new-match-id')
+            const fetchSpy = spyOn(michelBackService, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            michelBackService.catchup({faceItMatchId: 'new-match-id'})
+            expect(fetchSpy).toHaveBeenCalledWith('new-match-id')
+            expect(michelBackService.getSeriesData().faceIt.matchId).toStrictEqual('new-match-id')
         })
 
         it('should clear matchId without triggering a FaceIt fetch when payload sets it to empty string', () => {
@@ -1010,58 +996,54 @@ describe('MichelBackService', () => {
                 faceIt: {matchId: 'previous-id'},
             })
             const fetchSpy = spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            svc.catchup(null, {faceItMatchId: ''})
+            svc.catchup({faceItMatchId: ''})
             expect(fetchSpy).not.toHaveBeenCalled()
             expect(svc.getSeriesData().faceIt.matchId).toStrictEqual('')
         })
 
         it('should apply team names, logos and scores when the back is at defaults', () => {
-            const svc = new MichelBackService([], false)
-            svc.catchup(null, {
+            michelBackService.catchup({
                 team1: {name: 'Alpha', score: 2, logo: 'https://alpha.png'},
                 team2: {name: 'Bravo', score: 1, logo: 'https://bravo.png'},
             })
-            expect(svc.getSeriesData().team1).toMatchObject({name: 'Alpha', score: 2, logo: 'https://alpha.png'})
-            expect(svc.getSeriesData().team2).toMatchObject({name: 'Bravo', score: 1, logo: 'https://bravo.png'})
+            expect(michelBackService.getSeriesData().team1).toMatchObject({name: 'Alpha', score: 2, logo: 'https://alpha.png'})
+            expect(michelBackService.getSeriesData().team2).toMatchObject({name: 'Bravo', score: 1, logo: 'https://bravo.png'})
         })
 
         it('should skip team1/team2 name catchup when matchId triggers a FaceIt fetch', () => {
-            const svc = new MichelBackService([], false)
-            spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            svc.catchup(null, {
+            spyOn(michelBackService, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            michelBackService.catchup({
                 faceItMatchId: 'new-match-id',
                 team1: {name: 'FrontAlpha'},
                 team2: {name: 'FrontBravo'},
             })
             // Names are left at defaults so the FaceIt response (which the
             // mock skips here, but in production overwrites them) wins.
-            expect(svc.getSeriesData().team1.name).toStrictEqual('')
-            expect(svc.getSeriesData().team2.name).toStrictEqual('')
+            expect(michelBackService.getSeriesData().team1.name).toStrictEqual('')
+            expect(michelBackService.getSeriesData().team2.name).toStrictEqual('')
         })
 
         it('should skip team1/team2 logo catchup when matchId triggers a FaceIt fetch', () => {
-            const svc = new MichelBackService([], false)
-            spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            svc.catchup(null, {
+            spyOn(michelBackService, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            michelBackService.catchup({
                 faceItMatchId: 'new-match-id',
                 team1: {logo: 'https://front-alpha.png'},
                 team2: {logo: 'https://front-bravo.png'},
             })
-            expect(svc.getSeriesData().team1.logo).toStrictEqual('')
-            expect(svc.getSeriesData().team2.logo).toStrictEqual('')
+            expect(michelBackService.getSeriesData().team1.logo).toStrictEqual('')
+            expect(michelBackService.getSeriesData().team2.logo).toStrictEqual('')
         })
 
-        it('should still apply team scores even when matchId triggers a FaceIt fetch', () => {
+        it('should still apply team scores even when matchId triggers a FaceIt fetch', async () => {
             // FaceIt does not provide scores, so the front-cached scores
             // must still be honored under the normal back-at-default gate.
-            const svc = new MichelBackService([], false)
-            spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            svc.catchup(null, {
+            spyOn(michelBackService, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
+            await michelBackService.catchup({
                 faceItMatchId: 'new-match-id',
                 team1: {name: 'FrontAlpha', score: 3},
                 team2: {name: 'FrontBravo', score: 2},
             })
-            const data = svc.getSeriesData()
+            const data = michelBackService.getSeriesData()
             // Names skipped (FaceIt will overwrite), scores applied.
             expect(data.team1.name).toStrictEqual('')
             expect(data.team2.name).toStrictEqual('')
@@ -1075,7 +1057,7 @@ describe('MichelBackService', () => {
                 team1: {name: '', score: 0, logo: 'existing-team1-logo'},
                 team2: {name: '', score: 0, logo: ''},
             })
-            svc.catchup(null, {
+            svc.catchup({
                 team1: {logo: 'front-team1-logo'},
                 team2: {logo: 'front-team2-logo'},
             })
@@ -1093,7 +1075,7 @@ describe('MichelBackService', () => {
                 faceIt: {matchId: 'same-id'},
             })
             spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            svc.catchup(null, {
+            svc.catchup({
                 faceItMatchId: 'same-id',
                 team1: {name: 'Alpha', logo: 'alpha-logo'},
                 team2: {name: 'Bravo', logo: 'bravo-logo'},
@@ -1109,7 +1091,7 @@ describe('MichelBackService', () => {
                 team1: {name: 'Existing', score: 5, logo: ''},
                 team2: {name: '', score: 3, logo: ''},
             })
-            svc.catchup(null, {
+            svc.catchup({
                 team1: {name: 'FromFront', score: 9},
                 team2: {name: 'FromFront', score: 9},
             })
@@ -1123,49 +1105,52 @@ describe('MichelBackService', () => {
         })
 
         it('should ignore meaningless team payloads (empty name, zero score)', () => {
-            const svc = new MichelBackService([], false)
-            svc.catchup(null, {
+            michelBackService.catchup({
                 team1: {name: '', score: 0},
                 team2: {name: '', score: 0},
             })
-            const data = svc.getSeriesData()
+            const data = michelBackService.getSeriesData()
             expect(data.team1.name).toStrictEqual('')
             expect(data.team1.score).toStrictEqual(0)
             expect(data.team2.name).toStrictEqual('')
             expect(data.team2.score).toStrictEqual(0)
         })
 
-        it('should broadcast exactly once when no FaceIt fetch is triggered', () => {
-            const svc = new MichelBackService([], false)
-            const broadcastSpy = spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            svc.catchup(null, {tournamentLogo: 'logo', mapCount: 3})
-            expect(broadcastSpy).toHaveBeenCalledTimes(1)
-        })
-
-        it('should skip the trailing local broadcast when a FaceIt fetch is triggered', () => {
-            const svc = new MichelBackService([], false)
-            spyOn(svc, 'initialMatchDataFromFaceItMatchId').mockImplementation(() => undefined as any)
-            const broadcastSpy = spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
-            })
-            svc.catchup(null, {faceItMatchId: 'new-id', tournamentLogo: 'logo'})
-            expect(broadcastSpy).not.toHaveBeenCalled()
-        })
-
         it('should be wired into handleCommand', () => {
-            const svc = new MichelBackService([], false)
-            const catchupSpy = spyOn(svc, 'catchup').mockImplementation(() => {
+            const catchupSpy = spyOn(michelBackService, 'catchup').mockResolvedValue({
+                team1: {
+                    name: "",
+                    score: 0,
+                    logo: ""
+                },
+                team2: {
+                    name: "",
+                    score: 0,
+                    logo: ""
+                },
+                faceIt: {
+                    matchId: ""
+                },
+                standings: {},
+                display: {
+                    right: "",
+                    left: "",
+                    mapCount: 0,
+                    customCounter: 0,
+                    mapFormat: "FT1",
+                    tournamentLogo: "",
+                    optionalLogoDisplay: false
+                }
             })
-            svc.handleCommand(Buffer.from(JSON.stringify({command: 'catchup', value: {mapCount: 5}})))
-            expect(catchupSpy).toHaveBeenCalledWith(null, {mapCount: 5})
+            michelBackService.handleCommand(Buffer.from(JSON.stringify({command: 'catchup', value: {mapCount: 5}})))
+            expect(catchupSpy).toHaveBeenCalledWith({mapCount: 5})
         })
 
         it('should wire setMapCount through handleCommand', () => {
-            const svc = new MichelBackService([], false)
-            const setSpy = spyOn(svc, 'setMapCount').mockImplementation(() => {
+            const setSpy = spyOn(michelBackService, 'setMapCount').mockImplementation(() => {
             })
-            svc.handleCommand(Buffer.from(JSON.stringify({command: 'setMapCount', value: 7})))
-            expect(setSpy).toHaveBeenCalledWith(null, 7)
+            michelBackService.handleCommand(Buffer.from(JSON.stringify({command: 'setMapCount', value: 7})))
+            expect(setSpy).toHaveBeenCalledWith(7)
         })
 
         const MATCH_ID = '1-9f898257-b66c-4a72-9295-1b6aef2cb672'
@@ -1183,7 +1168,7 @@ describe('MichelBackService', () => {
             } as unknown as FaceItClient
             const svc = new MichelBackService([], false, undefined, mockedLogger, faceItClient)
             // action
-            await svc.initialMatchDataFromFaceItMatchId(undefined, `https://www.faceit.com/en/ow2/room/${MATCH_ID}/scoreboard?foo=bar`)
+            await svc.initialMatchDataFromFaceItMatchId(`https://www.faceit.com/en/ow2/room/${MATCH_ID}/scoreboard?foo=bar`)
             // assert
             expect(faceItClient.getNormalizedMatchData).toHaveBeenCalledWith(MATCH_ID)
         })
@@ -1201,10 +1186,10 @@ describe('MichelBackService', () => {
                 getNormalizedMatchData: fn(async () => ({raw: {}, team1: {name: 'A'}, team2: {name: 'B'}})),
             } as unknown as FaceItClient
             const svc = new MichelBackService([], false, seriesDataWithStaleStandings(), mockedLogger, faceItClient)
-            jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
+            jest.spyOn(svc, 'broadcastState').mockImplementation(() => {
             })
             // action
-            await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
+            await svc.initialMatchDataFromFaceItMatchId(MATCH_ID)
             // assert
             expect(svc.getSeriesData().standings).toEqual({})
         })
@@ -1217,55 +1202,56 @@ describe('MichelBackService', () => {
                 }),
             } as unknown as FaceItClient
             const svc = new MichelBackService([], false, seriesDataWithStaleStandings(), mockedLogger, faceItClient)
-            jest.spyOn(svc, 'sendUpdatedStateToCaller').mockImplementation(() => {
+            jest.spyOn(svc, 'broadcastState').mockImplementation(() => {
             })
             // action
-            await svc.initialMatchDataFromFaceItMatchId(undefined, MATCH_ID)
+            await svc.initialMatchDataFromFaceItMatchId(MATCH_ID)
             // assert
             expect(svc.getSeriesData().standings).toEqual({})
         })
     })
-
     describe('updateMapCountAndRefreshFaceItDataIfNeeded', () => {
-        it('should increment the mapCount by the provided counter', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-            // action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(null, 2)
+        it('should increment the mapCount by the provided counter', async () => {
+            // setup / action
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(2)
             // assert
             expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(3)
         })
-        it('should prevent updating the map counter to a map# below 1', () => {
-            // setup
-            const michelBackService = new MichelBackService([], false)
-            // action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(null, -3)
+        it('should prevent updating the map counter to a map# below 1', async () => {
+            // setup / action
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(-3)
             // assert
             expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(1)
         })
-        it('should attempt to load FaceIt data if there is FaceIt configuration and it mentions a matchRoom Id', () => {
+        it('should attempt to load FaceIt data if there is FaceIt configuration and it mentions a matchRoom Id', async () => {
             // setup
-            const michelBackService = new MichelBackService([], false)
-            const fetchFaceItMatchUpdatesStub = spyOn(michelBackService, "fetchFaceItMatchUpdates").mockImplementation(() => {
-            })
+            const fetchFaceItMatchUpdatesStub = spyOn(michelBackService, "fetchFaceItMatchUpdatesAndUpdateLobbyData").mockImplementation(() => Promise.resolve())
             // action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(null, 1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // assert
-            expect(fetchFaceItMatchUpdatesStub).toHaveBeenCalledWith(null, 2)
+            expect(fetchFaceItMatchUpdatesStub).toHaveBeenCalledWith(2)
         })
-        it('should not attempt to load FaceIt data if round has already been loaded and just return existing data', () => {
+        it('should not attempt to load FaceIt data if round has already been loaded and just return existing data', async () => {
             // setup
             const michelBackService = new MichelBackService([], false, {
                 ...DEFAULT_SERIES_DATA,
                 standings: {match2: {bans: {team1: {}, team2: {}}}}
             })
 
-            const fetchFaceItMatchUpdatesStub = spyOn(michelBackService, "sendUpdatedStateToCaller").mockImplementation(() => {
+            const fetchFaceItMatchUpdatesStub = spyOn(michelBackService, "broadcastState").mockImplementation(() => {
             })
             // action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(null, 1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // assert
-            expect(fetchFaceItMatchUpdatesStub).toHaveBeenCalledWith(null)
+            expect(fetchFaceItMatchUpdatesStub).not.toHaveBeenCalled()
+        })
+    })
+    describe('service constructor', () => {
+        it('should not replace series data from configuration file if series data were explicitly provided to the constructor', () => {
+            // setup / action
+            const michelBackService = new MichelBackService([], false, DEFAULT_SERIES_DATA)
+            // assert
+            expect(michelBackService.getSeriesData()).toStrictEqual(DEFAULT_SERIES_DATA)
         })
     })
 })

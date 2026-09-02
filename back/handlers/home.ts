@@ -1,5 +1,4 @@
 import * as fs from "fs"
-import {Response} from "express"
 
 import pino from "pino"
 import type {Logger} from "pino"
@@ -127,9 +126,11 @@ export class MichelBackService {
             const configFilePath = path.resolve(process.env.CONFIGFILE_PATH || __dirname + '/../config.json')
             this.logger.info({msg: 'Config file present -> updating seriesData', path: configFilePath})
             const configFile = JSON.parse(fs.readFileSync(configFilePath).toString())
-            const jsonSeriesConfigurationFromFile: SeriesData = configFile.seriesData
-            this.seriesData = jsonSeriesConfigurationFromFile
-            this.faceItApiKeyFromConfigFile = jsonSeriesConfigurationFromFile?.faceIt?.apiKey
+            const seriesDataFromConfigFile: SeriesData = configFile.seriesData
+            if (!seriesData) {
+                this.seriesData = seriesDataFromConfigFile
+            }
+            this.faceItApiKeyFromConfigFile = seriesDataFromConfigFile?.faceIt?.apiKey
         } catch (error) {
             this.logger.warn({
                 msg: 'No valid config file found! Initializing seriesData with default values.',
@@ -147,111 +148,114 @@ export class MichelBackService {
         this.connectionPool.push(socket)
     }
 
-    handleCommand(payloadAsBuffer: Buffer) {
+    /**
+     * Parses an incoming WebSocket message buffer, dispatches it to the appropriate
+     * state-mutating method, then calls `broadcastState` once to broadcast
+     * the resulting state to all connected clients.
+     * Unrecognised commands result in a no-op broadcast of the current state.
+     *
+     * @param payloadAsBuffer - Raw UTF-8 buffer received from the WebSocket containing a JSON object with at least a `command` string field, and optionally a `value` field.
+     */
+    async handleCommand(payloadAsBuffer: Buffer) {
         const payload = JSON.parse(payloadAsBuffer.toString('utf8'))
         if (this.debug) {
             this.logger.info({msg: '[DEBUG] Incoming command: ', payload})
         }
         switch (payload.command) {
             case 'increaseTeam1Score':
-                this.teamIncrementScore(null, 'team1', 1);
+                this.teamIncrementScore('team1', 1);
                 break;
             case 'increaseTeam2Score':
-                this.teamIncrementScore(null, 'team2', 1);
+                this.teamIncrementScore('team2', 1);
                 break;
             case 'decreaseTeam1Score':
-                this.teamIncrementScore(null, 'team1', -1);
+                this.teamIncrementScore('team1', -1);
                 break;
             case 'decreaseTeam2Score':
-                this.teamIncrementScore(null, 'team2', -1);
+                this.teamIncrementScore('team2', -1);
                 break;
             case 'updateTeam1Name':
-                this.teamUpdateName(null, 'team1', payload.value);
+                this.teamUpdateName('team1', payload.value);
                 break;
             case 'updateTeam2Name':
-                this.teamUpdateName(null, 'team2', payload.value);
+                this.teamUpdateName('team2', payload.value);
                 break;
             case 'swapTeams':
-                this.swapTeams(null);
+                this.swapTeams();
                 break;
             case 'increaseMapCount':
-                this.updateMapCountAndRefreshFaceItDataIfNeeded(null, 1);
+                await this.updateMapCountAndRefreshFaceItDataIfNeeded(1);
                 break;
             case 'decreaseMapCount':
-                this.updateMapCountAndRefreshFaceItDataIfNeeded(null, -1);
+                await this.updateMapCountAndRefreshFaceItDataIfNeeded(-1);
                 break;
             case 'updateMapFormat':
-                this.updateMapFormat(null, payload.value);
+                this.updateMapFormat(payload.value);
                 break;
             case 'updateTeam1Logo':
-                this.updateTeamLogo(null, 'team1', payload.value);
+                this.updateTeamLogo('team1', payload.value);
                 break;
             case 'updateTeam2Logo':
-                this.updateTeamLogo(null, 'team2', payload.value);
+                this.updateTeamLogo('team2', payload.value);
                 break;
-            case 'updateTournamentLogo' :
-                this.updateTournamentLogo(null, payload.value);
+            case 'updateTournamentLogo':
+                this.updateTournamentLogo(payload.value);
                 break;
-            case 'toggleOptionalLogoDisplay' :
-                this.toggleOptionalLogoDisplay(null);
+            case 'toggleOptionalLogoDisplay':
+                this.toggleOptionalLogoDisplay();
                 break;
             case 'updateFromMatchId':
-                this.initialMatchDataFromFaceItMatchId(null, payload.value);
+                await this.initialMatchDataFromFaceItMatchId(payload.value);
                 break;
             case 'fetchFaceItMatchUpdates':
-                this.fetchFaceItMatchUpdates(null, payload.value);
+                await this.fetchFaceItMatchUpdatesAndUpdateLobbyData(payload.value);
                 break;
             case 'increaseCustomCounter':
-                this.increaseCustomCounter(null);
+                this.increaseCustomCounter();
                 break;
             case 'decreaseCustomCounter':
-                this.decreaseCustomCounter(null);
+                this.decreaseCustomCounter();
                 break;
             case 'team1UpdateBan':
-                this.teamUpdateBan(null, 'team1', payload.value);
+                this.teamUpdateBan('team1', payload.value);
                 break;
             case 'team2UpdateBan':
-                this.teamUpdateBan(null, 'team2', payload.value);
+                this.teamUpdateBan('team2', payload.value);
                 break;
             case 'setMapCount':
-                this.setMapCount(null, payload.value);
+                this.setMapCount(payload.value);
                 break;
             case 'catchup':
-                this.catchup(null, payload.value);
+                await this.catchup(payload.value);
                 break;
             case 'countdownSet':
                 // Update the displayed value without running the timer
-                // (e.g. user dragged the slider while the timer was idle).
-                this.countdownSet(null, payload.value);
+                this.countdownSet(payload.value);
                 break;
             case 'countdownStart':
-                this.countdownStart(null, payload.value);
+                this.countdownStart(payload.value);
                 break;
             case 'countdownPause':
-                this.countdownPause(null);
+                this.countdownPause();
                 break;
             case 'countdownResume':
-                this.countdownResume(null);
+                this.countdownResume();
                 break;
             case 'countdownReset':
-                this.countdownReset(null, payload.value);
+                this.countdownReset(payload.value);
                 break;
             case 'countdownSetColor':
-                this.countdownSetColor(null, payload.value);
+                this.countdownSetColor(payload.value);
                 break;
-            default:
-                this.home(null)
         }
+        this.broadcastState()
     }
 
-    home(res: Response) {
-        this.sendUpdatedStateToCaller(res)
+    home(): SeriesData {
+        return this.seriesData
     }
 
-    sendUpdatedStateToCaller(res: Response) {
-        if (res && !res.headersSent) {
-            res.json(this.seriesData)
-        }
+    broadcastState() {
         if (this.connectionPool) {
             const connectionPoolWithonlyUnclosedSockets = this.connectionPool.filter(socket => !socket._closeFrameReceived)
             if (this.connectionPool.length !== connectionPoolWithonlyUnclosedSockets.length) {
@@ -265,7 +269,7 @@ export class MichelBackService {
         }
     }
 
-    swapTeams = (res: Response) => {
+    swapTeams = (): SeriesData => {
         const rightTeam = this.seriesData.display.right
         const leftTeam = this.seriesData.display.left
         this.seriesData.display.right = leftTeam
@@ -274,35 +278,34 @@ export class MichelBackService {
             this.logger.info('swapTeams')
         }
 
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
-    teamIncrementScore(res: Response, teamName: string, increment: number = 1) {
+    teamIncrementScore(teamName: string, increment: number = 1): SeriesData {
         const candidateScore = this.seriesData[teamName].score + increment
         this.seriesData[teamName].score = candidateScore >= 0 ? candidateScore : 0
         if (this.debug) {
             this.logger.info(`${teamName} increment score by ${increment}`)
         }
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
-    teamUpdateName(res: Response, team: string = 'team1', newName: string) {
+    teamUpdateName(team: string = 'team1', newName: string): SeriesData {
         if (team === 'team1' || team === 'team2') {
             this.seriesData[team].name = newName
             if (this.debug) {
                 this.logger.info(`${team} update name to ${newName}`)
             }
         }
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
-    updateMapFormat = (res: Response, newFormat: MapFormat) => {
+    updateMapFormat = (newFormat: MapFormat): SeriesData => {
         this.seriesData.display.mapFormat = newFormat
         if (this.debug) {
             this.logger.info('updateMapFormat')
         }
-
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
     /**
@@ -334,14 +337,13 @@ export class MichelBackService {
      * Set the displayed countdown value without starting the timer. Used
      * when the user drags the input/slider while the timer is idle.
      */
-    countdownSet = (res: Response, value: number) => {
+    countdownSet = (value: number) => {
         this.clearCountdownTimer()
         this.seriesData.display.countdown = this.normalizeCountdownSeconds(value)
         this.seriesData.display.countdownRunning = false
         if (this.debug) {
             this.logger.info(`countdownSet to ${this.seriesData.display.countdown}`)
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     /**
@@ -349,7 +351,7 @@ export class MichelBackService {
      * Replaces any previously-running interval so re-pressing Start while
      * the timer is already running simply resets it to the new value.
      */
-    countdownStart = (res: Response, value: number) => {
+    countdownStart = (value: number) => {
         this.clearCountdownTimer()
         this.seriesData.display.countdown = this.normalizeCountdownSeconds(value)
         this.seriesData.display.countdownRunning = this.seriesData.display.countdown > 0
@@ -359,26 +361,24 @@ export class MichelBackService {
         if (this.seriesData.display.countdownRunning) {
             this.countdownTimer = setInterval(this.tickCountdown, 1000)
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     /**
      * Pause the running countdown, keeping the current value visible.
      */
-    countdownPause = (res: Response) => {
+    countdownPause = () => {
         this.clearCountdownTimer()
         this.seriesData.display.countdownRunning = false
         if (this.debug) {
             this.logger.info(`countdownPause at ${this.seriesData.display.countdown}`)
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     /**
      * Resume a paused countdown. No-op if the current value is 0 (we
      * would simply tick to 0 immediately).
      */
-    countdownResume = (res: Response) => {
+    countdownResume = () => {
         this.clearCountdownTimer()
         if (this.seriesData.display.countdown > 0) {
             this.seriesData.display.countdownRunning = true
@@ -387,7 +387,6 @@ export class MichelBackService {
                 this.logger.info(`countdownResume from ${this.seriesData.display.countdown}`)
             }
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     /**
@@ -395,27 +394,25 @@ export class MichelBackService {
      * string clears the override and lets the component fall back to its
      * default CSS color.
      */
-    countdownSetColor = (res: Response, value: string) => {
+    countdownSetColor = (value: string) => {
         const color = typeof value === 'string' ? value : ''
         this.seriesData.display.countdownColor = color
         if (this.debug) {
             this.logger.info(`countdownSetColor to "${color}"`)
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     /**
      * Reset the countdown to a given value (or to 0 if none is provided)
      * and stop the timer.
      */
-    countdownReset = (res: Response, value?: number) => {
+    countdownReset = (value?: number) => {
         this.clearCountdownTimer()
         this.seriesData.display.countdown = this.normalizeCountdownSeconds(value)
         this.seriesData.display.countdownRunning = false
         if (this.debug) {
             this.logger.info(`countdownReset to ${this.seriesData.display.countdown}`)
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     /**
@@ -430,62 +427,54 @@ export class MichelBackService {
         } else {
             this.seriesData.display.countdown -= 1
         }
-        this.sendUpdatedStateToCaller(null)
     }
 
-    updateTournamentLogo = (res: Response, newLogo: string) => {
+    updateTournamentLogo = (newLogo: string): SeriesData => {
         this.seriesData.display.tournamentLogo = newLogo
         if (this.debug) {
             this.logger.info('updateTournamentLogo')
         }
-
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
-    updateTeamLogo = (res: Response, team: string, newLogo: string) => {
+    updateTeamLogo = (team: string, newLogo: string): SeriesData => {
         if (team === 'team1' || team === 'team2') {
             this.seriesData[team].logo = newLogo
             if (this.debug) {
                 this.logger.info('updateTeam1Logo')
             }
         }
-
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
-    toggleOptionalLogoDisplay = (res: Response) => {
+    toggleOptionalLogoDisplay = (): SeriesData => {
         this.seriesData.display.optionalLogoDisplay = !this.seriesData.display.optionalLogoDisplay
         if (this.debug) {
             this.logger.info('toggleOptionalLogoDisplay')
         }
-
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
-    updateMapCountAndRefreshFaceItDataIfNeeded = (res: Response, increment: number = 1) => {
+    updateMapCountAndRefreshFaceItDataIfNeeded = async (increment: number = 1): Promise<SeriesData> => {
         const candidate = this.seriesData.display.mapCount + increment
         this.logger.debug({
             msg: 'updateMapCountAndRefreshFaceItDataIfNeeded',
             mapCount: this.seriesData.display.mapCount
         })
-        if (candidate === this.seriesData.display.mapCount) {
-            this.sendUpdatedStateToCaller(res)
-        } else {
+        if (candidate !== this.seriesData.display.mapCount) {
             this.seriesData.display.mapCount = candidate > 0 ? candidate : 1
             if (this.debug) {
                 this.logger.info(`increase map count by ${increment}`)
             }
             // mapCount [1, +Infinity[
             if (!this.seriesData.standings[`match${this.seriesData.display.mapCount}`]) {
-                this.fetchFaceItMatchUpdates(res, this.seriesData.display.mapCount)
-                this.sendUpdatedStateToCaller(res)
-            } else {
-                this.sendUpdatedStateToCaller(res)
+                await this.fetchFaceItMatchUpdatesAndUpdateLobbyData(this.seriesData.display.mapCount)
             }
         }
+        return this.seriesData
     }
 
-    initialMatchDataFromFaceItMatchId = async (res: Response, matchIdOrURL: string,
+    initialMatchDataFromFaceItMatchId = async (matchIdOrURL: string,
     ) => {
         if (typeof matchIdOrURL !== "string" || !matchIdOrURL) {
             return
@@ -525,7 +514,6 @@ export class MichelBackService {
                     raw: this.seriesData?.faceIt?.raw
                 })
             }
-            this.sendUpdatedStateToCaller(res)
             return this.seriesData
         } catch (error) {
             this.logger.error({msg: 'FaceIt match data query failed', error})
@@ -533,20 +521,20 @@ export class MichelBackService {
         }
     }
 
-    increaseCustomCounter = (res: Response) => {
+    increaseCustomCounter = (): SeriesData => {
         this.seriesData.display.customCounter++
         if (this.debug) {
             this.logger.info('increaseCustomCount')
         }
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
-    decreaseCustomCounter = (res: Response) => {
+    decreaseCustomCounter = (): SeriesData => {
         this.seriesData.display.customCounter--
         if (this.debug) {
             this.logger.info('decreaseCustomCount')
         }
-        this.sendUpdatedStateToCaller(res)
+        return this.seriesData
     }
 
     updatedLobbyDataFromFaceItMatchId = async (matchId: string, mapNumber: number, next: () => void) => {
@@ -602,30 +590,30 @@ export class MichelBackService {
         }
     }
 
-    fetchFaceItMatchUpdates = (res: Response, mapNumber: number) => {
-        try {
-            if (this.seriesData?.faceIt?.matchId.length > 0) {
-                this.updatedLobbyDataFromFaceItMatchId(this.seriesData?.faceIt?.matchId, mapNumber, () => {
-                    this.sendUpdatedStateToCaller(res)
-                })
-            } else {
-                this.logger.info('No faceIt matchId present.')
-                this.sendUpdatedStateToCaller(res)
+    fetchFaceItMatchUpdatesAndUpdateLobbyData = (mapNumber: number): Promise<void> => {
+        return new Promise<void>((resolve) => {
+            try {
+                if (this.seriesData?.faceIt?.matchId.length > 0) {
+                    return this.updatedLobbyDataFromFaceItMatchId(this.seriesData?.faceIt?.matchId, mapNumber, resolve)
+                } else {
+                    this.logger.info({msg: 'No faceIt matchId present.'})
+                    resolve()
+                }
+            } catch (error) {
+                this.logger.error({msg: 'Error fetching faceIt match updates', error: error.message})
+                resolve()
             }
-        } catch (error) {
-            this.logger.error({msg: 'Error fetching faceIt match updates:', error: error.message})
-            this.sendUpdatedStateToCaller(res)
-        }
+        })
     }
 
-    teamUpdateBan(res: Response, teamName: string, banName: string) {
+    teamUpdateBan(teamName: string, banName: string) {
         if (teamName === 'team1') {
-            return this.team1UpdateBan(res, banName)
+            return this.team1UpdateBan(banName)
         }
-        return this.team2UpdateBan(res, banName)
+        return this.team2UpdateBan(banName)
     }
 
-    team1UpdateBan(res: Response, bannedHeroName: string) {
+    team1UpdateBan(bannedHeroName: string) {
         const roundStandings = this.seriesData.standings[`match${this.seriesData.display.mapCount}`]
         if (!roundStandings) {
             this.seriesData.standings[`match${this.seriesData.display.mapCount}`] = {
@@ -639,10 +627,9 @@ export class MichelBackService {
         if (this.debug) {
             this.logger.info({msg: 'team1UpdateBan', bannedHeroName})
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
-    team2UpdateBan(res: Response, bannedHeroName: string) {
+    team2UpdateBan(bannedHeroName: string) {
         const roundStandings = this.seriesData.standings[`match${this.seriesData.display.mapCount}`]
         if (!roundStandings) {
             this.seriesData.standings[`match${this.seriesData.display.mapCount}`] = {
@@ -654,9 +641,8 @@ export class MichelBackService {
         }
         this.seriesData.standings[`match${this.seriesData.display.mapCount}`].bans.team2.heroImage = bannedHeroName
         if (this.debug) {
-            this.logger.info({msg: 'team1UpdateBan', bannedHeroName})
+            this.logger.info({msg: 'team2UpdateBan', bannedHeroName})
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     getSeriesData(): SeriesData {
@@ -675,22 +661,19 @@ export class MichelBackService {
      * out-of-range payloads are ignored so a malformed client message
      * cannot wedge the state.
      */
-    setMapCount = (res: Response, rawValue: any) => {
+    setMapCount = (rawValue: any) => {
         const parsed = typeof rawValue === 'number' ? rawValue : Number(rawValue)
         if (!Number.isFinite(parsed)) {
-            this.sendUpdatedStateToCaller(res)
             return
         }
         const sanitized = Math.max(1, Math.floor(parsed))
         if (sanitized === this.seriesData.display.mapCount) {
-            this.sendUpdatedStateToCaller(res)
             return
         }
         this.seriesData.display.mapCount = sanitized
         if (this.debug) {
             this.logger.info({msg: 'setMapCount', mapCount: sanitized})
         }
-        this.sendUpdatedStateToCaller(res)
     }
 
     /**
@@ -735,7 +718,7 @@ export class MichelBackService {
      * broadcast still goes out so the front-end can settle on the current
      * server state.
      */
-    catchup = (res: Response, intent: any) => {
+    catchup = async (intent: any) => {
         const applied: string[] = []
         const skipped: string[] = []
         let matchIdTriggeredFetch = false
@@ -748,7 +731,7 @@ export class MichelBackService {
                         // Defer broadcast: initialMatchDataFromFaceItMatchId
                         // broadcasts on completion.
                         this.seriesData.faceIt.matchId = intent.faceItMatchId
-                        this.initialMatchDataFromFaceItMatchId(null, intent.faceItMatchId)
+                        await this.initialMatchDataFromFaceItMatchId(intent.faceItMatchId)
                         matchIdTriggeredFetch = true
                     } else {
                         this.seriesData.faceIt.matchId = ''
@@ -832,12 +815,6 @@ export class MichelBackService {
         // the post-fetch state second; that's fine on the wire but noisy.
         // We still broadcast once if no fetch was triggered so the scenes
         // see all the other applied fields immediately.
-        if (!matchIdTriggeredFetch) {
-            this.sendUpdatedStateToCaller(res)
-        } else if (res && !res.headersSent) {
-            // Echo current state back to the HTTP caller (if any) without
-            // re-broadcasting to the WS pool — the FaceIt fetch will do that.
-            res.json(this.seriesData)
-        }
+        return this.seriesData
     }
 }
