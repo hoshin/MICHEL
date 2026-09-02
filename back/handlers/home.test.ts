@@ -778,7 +778,7 @@ describe('MichelBackService', () => {
         beforeEach(() => {
             michelBackService = new MichelBackService([], false)
         })
-        it('should update Team1 ban for round 2 if current round is 2 and selected team is team 1', () => {
+        it('should update Team1 ban for round 2 if current round is 2 and selected team is team 1', async () => {
             // setup
             const expectedUpdatedStandings = {
                 "match2": {
@@ -791,14 +791,14 @@ describe('MichelBackService', () => {
                 },
 
             }
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // action
             michelBackService.teamUpdateBan('team1', 'Foo')
             // assert
             expect(michelBackService.getSeriesData().standings).toEqual(expectedUpdatedStandings)
         })
 
-        it('should update Team2 ban for round 2 if current round is 2 and selected team is team 2', () => {
+        it('should update Team2 ban for round 2 if current round is 2 and selected team is team 2', async () => {
             // setup
             // const michelBackService = new MichelBackService([], false)
             const expectedUpdatedStandings = {
@@ -811,7 +811,7 @@ describe('MichelBackService', () => {
                     },
                 },
             }
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // action
             michelBackService.teamUpdateBan('team2', 'Bar')
             // assert
@@ -952,7 +952,7 @@ describe('MichelBackService', () => {
                 ...structuredClone(DEFAULT_SERIES_DATA),
                 faceIt: {matchId: 'some-id'},
             })
-            const fetchSpy = spyOn(svc, 'fetchFaceItMatchUpdates').mockImplementation(() => Promise.resolve())
+            const fetchSpy = spyOn(svc, 'fetchFaceItMatchUpdatesAndUpdateLobbyData').mockImplementation(() => Promise.resolve())
             svc.setMapCount(5)
             expect(fetchSpy).not.toHaveBeenCalled()
         })
@@ -1211,27 +1211,27 @@ describe('MichelBackService', () => {
         })
     })
     describe('updateMapCountAndRefreshFaceItDataIfNeeded', () => {
-        it('should increment the mapCount by the provided counter', () => {
+        it('should increment the mapCount by the provided counter', async () => {
             // setup / action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(2)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(2)
             // assert
             expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(3)
         })
-        it('should prevent updating the map counter to a map# below 1', () => {
+        it('should prevent updating the map counter to a map# below 1', async () => {
             // setup / action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(-3)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(-3)
             // assert
             expect(michelBackService.getSeriesData().display.mapCount).toStrictEqual(1)
         })
-        it('should attempt to load FaceIt data if there is FaceIt configuration and it mentions a matchRoom Id', () => {
+        it('should attempt to load FaceIt data if there is FaceIt configuration and it mentions a matchRoom Id', async () => {
             // setup
-            const fetchFaceItMatchUpdatesStub = spyOn(michelBackService, "fetchFaceItMatchUpdates").mockImplementation(() => Promise.resolve())
+            const fetchFaceItMatchUpdatesStub = spyOn(michelBackService, "fetchFaceItMatchUpdatesAndUpdateLobbyData").mockImplementation(() => Promise.resolve())
             // action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // assert
             expect(fetchFaceItMatchUpdatesStub).toHaveBeenCalledWith(2)
         })
-        it('should not attempt to load FaceIt data if round has already been loaded and just return existing data', () => {
+        it('should not attempt to load FaceIt data if round has already been loaded and just return existing data', async () => {
             // setup
             const michelBackService = new MichelBackService([], false, {
                 ...DEFAULT_SERIES_DATA,
@@ -1241,7 +1241,7 @@ describe('MichelBackService', () => {
             const fetchFaceItMatchUpdatesStub = spyOn(michelBackService, "broadcastState").mockImplementation(() => {
             })
             // action
-            michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
+            await michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(1)
             // assert
             expect(fetchFaceItMatchUpdatesStub).not.toHaveBeenCalled()
         })

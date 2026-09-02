@@ -184,10 +184,10 @@ export class MichelBackService {
                 this.swapTeams();
                 break;
             case 'increaseMapCount':
-                this.updateMapCountAndRefreshFaceItDataIfNeeded(1);
+                await this.updateMapCountAndRefreshFaceItDataIfNeeded(1);
                 break;
             case 'decreaseMapCount':
-                this.updateMapCountAndRefreshFaceItDataIfNeeded(-1);
+                await this.updateMapCountAndRefreshFaceItDataIfNeeded(-1);
                 break;
             case 'updateMapFormat':
                 this.updateMapFormat(payload.value);
@@ -208,7 +208,7 @@ export class MichelBackService {
                 await this.initialMatchDataFromFaceItMatchId(payload.value);
                 break;
             case 'fetchFaceItMatchUpdates':
-                await this.fetchFaceItMatchUpdates(payload.value);
+                await this.fetchFaceItMatchUpdatesAndUpdateLobbyData(payload.value);
                 break;
             case 'increaseCustomCounter':
                 this.increaseCustomCounter();
@@ -230,7 +230,6 @@ export class MichelBackService {
                 break;
             case 'countdownSet':
                 // Update the displayed value without running the timer
-                // (e.g. user dragged the slider while the timer was idle).
                 this.countdownSet(payload.value);
                 break;
             case 'countdownStart':
@@ -278,7 +277,7 @@ export class MichelBackService {
         if (this.debug) {
             this.logger.info('swapTeams')
         }
-        // this.broadcastState()
+
         return this.seriesData
     }
 
@@ -456,7 +455,7 @@ export class MichelBackService {
         return this.seriesData
     }
 
-    updateMapCountAndRefreshFaceItDataIfNeeded = (increment: number = 1): SeriesData => {
+    updateMapCountAndRefreshFaceItDataIfNeeded = async (increment: number = 1): Promise<SeriesData> => {
         const candidate = this.seriesData.display.mapCount + increment
         this.logger.debug({
             msg: 'updateMapCountAndRefreshFaceItDataIfNeeded',
@@ -469,7 +468,7 @@ export class MichelBackService {
             }
             // mapCount [1, +Infinity[
             if (!this.seriesData.standings[`match${this.seriesData.display.mapCount}`]) {
-                this.fetchFaceItMatchUpdates(this.seriesData.display.mapCount)
+                await this.fetchFaceItMatchUpdatesAndUpdateLobbyData(this.seriesData.display.mapCount)
             }
         }
         return this.seriesData
@@ -591,11 +590,11 @@ export class MichelBackService {
         }
     }
 
-    fetchFaceItMatchUpdates = (mapNumber: number): Promise<void> => {
+    fetchFaceItMatchUpdatesAndUpdateLobbyData = (mapNumber: number): Promise<void> => {
         return new Promise<void>((resolve) => {
             try {
                 if (this.seriesData?.faceIt?.matchId.length > 0) {
-                    this.updatedLobbyDataFromFaceItMatchId(this.seriesData?.faceIt?.matchId, mapNumber, resolve)
+                    return this.updatedLobbyDataFromFaceItMatchId(this.seriesData?.faceIt?.matchId, mapNumber, resolve)
                 } else {
                     this.logger.info({msg: 'No faceIt matchId present.'})
                     resolve()
@@ -665,19 +664,16 @@ export class MichelBackService {
     setMapCount = (rawValue: any) => {
         const parsed = typeof rawValue === 'number' ? rawValue : Number(rawValue)
         if (!Number.isFinite(parsed)) {
-            // this.broadcastState()
             return
         }
         const sanitized = Math.max(1, Math.floor(parsed))
         if (sanitized === this.seriesData.display.mapCount) {
-            // this.broadcastState()
             return
         }
         this.seriesData.display.mapCount = sanitized
         if (this.debug) {
             this.logger.info({msg: 'setMapCount', mapCount: sanitized})
         }
-        // this.broadcastState()
     }
 
     /**
@@ -813,7 +809,6 @@ export class MichelBackService {
 
         this.logger.info({msg: 'catchup', applied, skipped})
 
-        // this.broadcastState()
         // initialMatchDataFromFaceItMatchId triggers its own async broadcast
         // once the FaceIt fetch settles. If we also broadcast synchronously
         // here, the front would see the partially-updated state first and
