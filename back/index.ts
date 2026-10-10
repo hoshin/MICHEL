@@ -1,12 +1,12 @@
-import express, { Request, Response } from 'express'
+import express from 'express'
 import { WebSocketServer } from 'ws'
 const app = express()
 const port = 3000
 
 import {
-    MichelBackService,
-    SeriesData
+    MichelBackService
 } from './handlers/home.js'
+import {makeUpdateSeriesStateAndReturnItAsJSON} from './lib/updateSeriesStateAndReturnItAsJSON.js'
 
 let serverSocket = null
 const connectionPool = []
@@ -14,15 +14,7 @@ let michelBackService: MichelBackService = new MichelBackService(connectionPool,
 
 app.use(express.json())
 
-/**
- * Wraps a synchronous service call: executes it, sends the resulting
- * SeriesData as a JSON response, and broadcasts the updated state to all
- * connected WebSocket clients.
- */
-const updateSeriesStateAndReturnItAsJSON = (fn: () => SeriesData) => (_: Request, res: Response) => {
-    res.json(fn())
-    michelBackService.broadcastState()
-}
+const updateSeriesStateAndReturnItAsJSON = makeUpdateSeriesStateAndReturnItAsJSON(() => michelBackService.broadcastState())
 
 app.get('/', updateSeriesStateAndReturnItAsJSON(() => michelBackService.home()))
 app.post('/team1-increase-score', updateSeriesStateAndReturnItAsJSON(() => michelBackService.teamIncrementScore('team1', 1)))
@@ -48,7 +40,9 @@ server.on('upgrade', (req, socket, head) => {
 const wsServer = new WebSocketServer({ noServer: true })
 wsServer.on('connection', socket => {
     michelBackService.updateConnectionPool(socket)
-    socket.on('message', buffer => {
-        michelBackService.handleCommand(buffer)
+    socket.on('message', (buffer: Buffer) => {
+        void michelBackService.handleCommand(buffer).catch(error => {
+            console.error('[WebSocket] Could not handle command: ', error, buffer.toString('utf8'))
+        })
     })
 })
