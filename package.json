@@ -25,6 +25,7 @@
     "build:electron-app:linux": "npx electron-builder --linux --x64",
     "build:electron-app:mac": "npx electron-builder --mac --x64 --arm64",
     "build:all": "npm run build:clean && npm run build:back && npm run build:front && npm run build:streamdeck-plugin && npm run build:electron-app",
+    "format:back": "cd ./back && npm run format",
     "start": "npm run build:back && npm run build:front && concurrently \"npm run start:back:build\" \"npm run start:front\"",
     "start:back": "cd ./back && npm run start",
     "start:back:build": "node ./dist/back/index.js",
