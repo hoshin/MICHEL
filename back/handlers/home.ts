@@ -427,6 +427,7 @@ export class MichelBackService {
         } else {
             this.seriesData.display.countdown -= 1
         }
+        this.broadcastState()
     }
 
     updateTournamentLogo = (newLogo: string): SeriesData => {

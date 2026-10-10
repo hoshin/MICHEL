@@ -847,6 +847,42 @@ describe('MichelBackService', () => {
             expect(sendStub).toHaveBeenCalledTimes(2)
         })
     })
+    describe('countdown tick', () => {
+        beforeEach(() => {
+            jest.useFakeTimers()
+        })
+        afterEach(() => {
+            jest.clearAllTimers()
+            jest.useRealTimers()
+        })
+        it('should broadcast the decremented countdown to all clients on every tick', () => {
+            // setup
+            const sendStub = fn()
+            const connectionPool = [{send: sendStub}, {send: sendStub}]
+            const service = new MichelBackService(connectionPool, false)
+            service.countdownStart(3)
+            sendStub.mockClear()
+            // action
+            jest.advanceTimersByTime(2000)
+            // assert
+            expect(sendStub).toHaveBeenCalledTimes(4) // 2 ticks * 2 clients
+        })
+        it('should broadcast the final state when the countdown reaches zero and stops', () => {
+            // setup
+            const sendStub = fn()
+            const connectionPool = [{send: sendStub}]
+            const service = new MichelBackService(connectionPool, false)
+            service.countdownStart(1)
+            sendStub.mockClear()
+            // action
+            jest.advanceTimersByTime(1000)
+            // assert
+            const calls = sendStub.mock.calls
+            const lastPayload = JSON.parse(calls[calls.length - 1][0] as string)
+            expect(lastPayload.display.countdown).toBe(0)
+            expect(lastPayload.display.countdownRunning).toBe(false)
+        })
+    })
     describe('teamUpdateName', () => {
         it('should correctly update team1 name if provided name is `team1`', () => {
             // setup / action
