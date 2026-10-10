@@ -178,7 +178,7 @@ ALWAYS first ensure `main` is up to date before creating a new branch based on i
 ## Before creating a new PR
 
 * It is expected for the `gh` cli tool to be installed on the machine. If not, just have the human on the other end of the keyboard do it.
-* Unit tests for the impacted projects MUST pass
+* All unit tests in the updated sub-projects MUST pass (objective: ensure new tests do not poison the previously existing tests setup)
 * Impacted projects MUST have a clean lint / format
 * Impacted projects build MUST pass
 * The branch is correctly prefixed and every commit follows the required message format
