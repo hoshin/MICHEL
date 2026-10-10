@@ -1,10 +1,10 @@
-import { createDefaultPreset } from 'ts-jest'
+import { createDefaultPreset } from 'ts-jest';
 
 const presetConfig = createDefaultPreset({
   tsconfigPath: 'tsconfig.json',
   compiler: 'typescript',
   diagnostics: true,
-})
+});
 
 export default {
   preset: 'ts-jest',

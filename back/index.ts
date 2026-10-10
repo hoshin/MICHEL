@@ -1,43 +1,60 @@
-import express from 'express'
-import { WebSocketServer } from 'ws'
-const app = express()
-const port = 3000
+import express from 'express';
+import { WebSocketServer } from 'ws';
+const app = express();
+const port = 3000;
 
-import {
-    MichelBackService
-} from './handlers/home.js'
+import { MichelBackService } from './handlers/home.js';
 
-let serverSocket = null
-const connectionPool = []
-let michelBackService: MichelBackService = new MichelBackService(connectionPool, process.env.DEBUG === 'true')
+let serverSocket = null;
+const connectionPool = [];
+let michelBackService: MichelBackService = new MichelBackService(
+  connectionPool,
+  process.env.DEBUG === 'true'
+);
 
-app.use(express.json())
+app.use(express.json());
 
-app.get('/', (_, res) => michelBackService.home(res))
-app.post('/team1-increase-score', (_, res) => michelBackService.teamIncrementScore(res, 'team1', 1))
-app.post('/team1-decrease-score', (_, res) => michelBackService.teamIncrementScore(res, 'team1', -1))
-app.post('/team2-increase-score', (_, res) => michelBackService.teamIncrementScore(res, 'team2', 1))
-app.post('/team2-decrease-score', (_, res) => michelBackService.teamIncrementScore(res, 'team2', -1))
-app.post('/custom-counter-increase', (_, res) => michelBackService.increaseCustomCounter(res))
-app.post('/custom-counter-decrease', (_, res) => michelBackService.decreaseCustomCounter(res))
-app.post('/increase-map-count', (_, res) => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, 1))
-app.post('/decrease-map-count', (_, res) => michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, -1))
-app.post('/swap-teams', (_, res) => michelBackService.swapTeams(res))
+app.get('/', (_, res) => michelBackService.home(res));
+app.post('/team1-increase-score', (_, res) =>
+  michelBackService.teamIncrementScore(res, 'team1', 1)
+);
+app.post('/team1-decrease-score', (_, res) =>
+  michelBackService.teamIncrementScore(res, 'team1', -1)
+);
+app.post('/team2-increase-score', (_, res) =>
+  michelBackService.teamIncrementScore(res, 'team2', 1)
+);
+app.post('/team2-decrease-score', (_, res) =>
+  michelBackService.teamIncrementScore(res, 'team2', -1)
+);
+app.post('/custom-counter-increase', (_, res) =>
+  michelBackService.increaseCustomCounter(res)
+);
+app.post('/custom-counter-decrease', (_, res) =>
+  michelBackService.decreaseCustomCounter(res)
+);
+app.post('/increase-map-count', (_, res) =>
+  michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, 1)
+);
+app.post('/decrease-map-count', (_, res) =>
+  michelBackService.updateMapCountAndRefreshFaceItDataIfNeeded(res, -1)
+);
+app.post('/swap-teams', (_, res) => michelBackService.swapTeams(res));
 
 const server = app.listen(port, () => {
-    console.log(`M.I.C.H.E.L. backend service listening on port : ${port}`)
-})
+  console.log(`M.I.C.H.E.L. backend service listening on port : ${port}`);
+});
 
 server.on('upgrade', (req, socket, head) => {
-    wsServer.handleUpgrade(req, socket, head, socket => {
-        serverSocket = socket
-        wsServer.emit('connection', socket, req)
-    })
-})
-const wsServer = new WebSocketServer({ noServer: true })
-wsServer.on('connection', socket => {
-    michelBackService.updateConnectionPool(socket)
-    socket.on('message', buffer => {
-        michelBackService.handleCommand(buffer)
-    })
-})
+  wsServer.handleUpgrade(req, socket, head, (socket) => {
+    serverSocket = socket;
+    wsServer.emit('connection', socket, req);
+  });
+});
+const wsServer = new WebSocketServer({ noServer: true });
+wsServer.on('connection', (socket) => {
+  michelBackService.updateConnectionPool(socket);
+  socket.on('message', (buffer) => {
+    michelBackService.handleCommand(buffer);
+  });
+});
